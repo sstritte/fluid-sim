@@ -1,4 +1,4 @@
-### Parallel Black and White Photo Colorizer
+# Parallel Black and White Photo Colorizer
 Jennifer Chou (jtchou), Sienna Stritter (sstritte)
 
 ## Proposal
@@ -17,11 +17,11 @@ We will attempt to distribute the network computation across multiple GPU cores,
 ### Resources
 Our idea is based on this algorithm:
 [Colorful Image Colorization](https://arxiv.org/pdf/1603.08511.pdf)
-2016. Richard Zhang, Phillip Isola, and Alexei A. Efros.
+Richard Zhang, Phillip Isola, and Alexei A. Efros. 2016.
 
 We will try to implement the colorizer algorithm using a parallelizable neural network based off of:
 [Caffe: Convolutional Architecture for Fast Feature Embedding](https://github.com/BVLC/caffe)
-2014. Jia, Yangqing and Shelhamer, Evan and Donahue, Jeff and Karayev, Sergey and Long, Jonathan and Girshick, Ross and Guadarrama, Sergio and Darrell, Trevor.
+Jia, Yangqing and Shelhamer, Evan and Donahue, Jeff and Karayev, Sergey and Long, Jonathan and Girshick, Ross and Guadarrama, Sergio and Darrell, Trevor. 2014.
 
 ### Goals and Deliverables
 
