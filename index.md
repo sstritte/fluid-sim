@@ -27,10 +27,10 @@ We will try to implement our own colorizer algorithm using a parallelizable neur
 
 ### Goals and Deliverables
 What we plan to achieve:
--Implement a simple colorizer algorithm with a basic, sequential network with one thread of control (we can reference the UC Berkeley research paper for guidance on the algorithm, and apply our knowledge about neural networks from 10-601).
--Transform the sequential algorithm to run with CUDA on an NVIDIA GPU (similar to Assignment 2)
--Distribute work among cores by analyzing and identifying workload characteristics of the algorithm.
--Try to further improve performance by considering other techniques like shared memory and cache usage. 
+- Implement a simple colorizer algorithm with a basic, sequential network with one thread of control (we can reference the UC Berkeley research paper for guidance on the algorithm, and apply our knowledge about neural networks from 10-601).
+- Transform the sequential algorithm to run with CUDA on an NVIDIA GPU (similar to Assignment 2)
+- Distribute work among cores by analyzing and identifying workload characteristics of the algorithm.
+- Try to further improve performance by considering other techniques like shared memory and cache usage. 
 
 Our final deliverable will be a webpage featuring a widget that will allow users to upload a black and white photo. We will run our algorithm on their photo to generate a plausible coloring. Our algorithm has to perform well enough so that user will not grow impatient while waiting to see their transformed photo. We hope to achieve performance that is competitive with the UC Berkeley Caffe-based implemented that is used in [this widget](http://demos.algorithmia.com/colorize-photos/).
 
@@ -41,10 +41,16 @@ We will will run the parallel version of our algorithm of the GHC machines with 
 
 ### Schedule 
 April 10 - 13: Familiarize ourselves with the UC Berkeley project, Review CNN concepts
+
 April 13: Start implementing baseline algorithm
+
 April 19: Finish implementing baseline algorithm
+
 April 22 - 25: Translate parallelizable section of the algorithm into CUDA
+
 April 26 - May 3: Determine optimal distribution of work among cores
+
 May 4 - 9: Further improve performance to achieve acceptable speedup
+
 May 10 - 11: Implement demo width, Prepare for presentation
 
