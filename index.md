@@ -16,10 +16,12 @@ The deep learning network is inherently sequential in that each layer has to com
 
 ### Resources
 Our project idea is inspired by this algorithm:
+
 [Colorful Image Colorization](https://arxiv.org/pdf/1603.08511.pdf)
 Richard Zhang, Phillip Isola, and Alexei A. Efros. 2016.
 
 They used the deep learning framework Caffe to perform their algorithm.
+
 [Caffe: Convolutional Architecture for Fast Feature Embedding](https://github.com/BVLC/caffe)
 Jia, Yangqing and Shelhamer, Evan and Donahue, Jeff and Karayev, Sergey and Long, Jonathan and Girshick, Ross and Guadarrama, Sergio and Darrell, Trevor. 2014.
 
