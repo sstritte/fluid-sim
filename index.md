@@ -1,6 +1,3 @@
-# Parallel Black and White Photo Colorizer
-Jennifer Chou (jtchou), Sienna Stritter (sstritte)
-
 ## Proposal
 ### Summary
 We are going to implement and optimize a deep learning algorithm that generates plausible colored versions of black and white photos.
@@ -8,8 +5,7 @@ We are going to implement and optimize a deep learning algorithm that generates 
 ### Background
 Our project is inspired by the work of Richard Zhang, Phillip Isola, and Alexei A. Efros from UC Berkeley. They configured a convolutional neural network (using a deep learning framework called Caffe) that attempts to automatically colorize a black and white photo. We seek to implement our own colorizer by creating a similar neural network setup that can be parallelized.
 
-Inline-style: 
-![alt text](https://github.com/sstritte/418colorizer/images/colorizeCNN.png "CNN network architecture")
+![CNN network architecture](https://github.com/sstritte/418colorizer/blob/master/images/colorizerCNN.png)
 
 This diagram is from their research paper. Given the lightness channels of the input image, the network generates a probability distribution of the *a* and *b* color components.
 
