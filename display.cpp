@@ -102,7 +102,9 @@ handleKeyPress(unsigned char key, int x, int y) {
 void
 handleMouseMove(int x, int y) {
     int index = (gDisplay.height - y - 1) * gDisplay.width + x;
-    gDisplay.mousePressedLocation[index] = 1;
+    if (0 <= index && index < gDisplay.height * gDisplay.width) {
+        gDisplay.mousePressedLocation[index] = 1;
+    }
 }
 
 // renderPicture --
