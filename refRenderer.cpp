@@ -7,16 +7,39 @@
 #include "image.h"
 #include "util.h"
 
+#define CELL_DIM 16 // a grid cell is 10x10 pixels
+
 RefRenderer::RefRenderer() {
     image = NULL;
     mousePressedLocation = NULL;
+    p = NULL;
+    vx = NULL;
+    vy = NULL;
 }
 
 RefRenderer::~RefRenderer() {
 
-    if (image) {
-        delete image;
+    if (image) delete image;
+    if (mousePressedLocation) delete mousePressedLocation;
+    if (p) {
+        for (int i = 0; i < ny; i++) {
+            if (p[i]) delete p[i];
+        } 
+        delete p;
     }
+    if (vx) {
+        for (int i = 0; i < ny; i++) {
+            if (vx[i]) delete vx[i];
+        } 
+        delete vx;
+    }
+    if (vy) {
+        for (int i = 0; i < ny + 1; i++) {
+            if (vy[i]) delete vy[i];
+        } 
+        delete vy;
+    }
+
 }
 
 const Image*
@@ -26,7 +49,23 @@ RefRenderer::getImage() {
 
 void
 RefRenderer::setup() {
-    // nothing to do here
+   nx = image->width / CELL_DIM;
+   ny = image->height / CELL_DIM;
+   // p is pressures
+   p = new float*[ny];
+   for (int i = 0; i < ny; i++) {
+       p[i] = new float[nx];
+   }
+   // vx is left/right velocities
+   vx = new float*[ny];
+   for (int i = 0; i < ny; i++) {
+       vx[i] = new float[nx + 1];
+   }   
+   // vy is up/down velocities
+   vy = new float*[ny + 1];
+   for (int i = 0; i < ny + 1; i++) {
+       vy[i] = new float[nx];
+   }
 }
 
 void RefRenderer::setMousePressedLocation(int* mpl) {

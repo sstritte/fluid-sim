@@ -18,7 +18,8 @@ void startRendererWithDisplay(CircleRenderer* renderer); // From display.cpp
 
 int main(int argc, char** argv)
 {
-    int imageSize = 512;
+    int imageWidth = 512;
+    int imageHeight = 512;
     bool useBaseline = false;
 
     // parse commandline options ////////////////////////////////////////////
@@ -43,7 +44,7 @@ int main(int argc, char** argv)
     }
     // end parsing of commandline options //////////////////////////////////////
 
-    printf("Rendering %dx%d simulation\n", imageSize, imageSize);
+    printf("Rendering %dx%d simulation\n", imageWidth, imageHeight);
 
     CircleRenderer* renderer;
    
@@ -52,7 +53,7 @@ int main(int argc, char** argv)
     else
         renderer = new CudaRenderer();
 
-    renderer->allocOutputImage(imageSize, imageSize);
+    renderer->allocOutputImage(imageWidth, imageHeight);
     renderer->setup();
 
     glutInit(&argc, argv);
