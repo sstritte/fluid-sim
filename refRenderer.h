@@ -16,6 +16,13 @@ private:
     int nx; // number of cells in a row
     int ny; // number of cells in a column
 
+    float** velocitiesX;
+    float** velocitiesY;
+    int cells_per_side;
+    float*** color;
+    float*** colorCopy;
+
+    void advect();
 public:
 
     RefRenderer();
