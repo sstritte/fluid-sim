@@ -17,12 +17,15 @@ private:
     int ny; // number of cells in a column
 
     float** velocitiesX;
+    float** velocitiesXcopy;
     float** velocitiesY;
+    float** velocitiesYcopy;
     int cells_per_side;
     float*** color;
     float*** colorCopy;
 
-    void advect();
+    void advectColor();
+    void advectVelocities();
 public:
 
     RefRenderer();

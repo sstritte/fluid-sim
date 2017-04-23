@@ -121,6 +121,8 @@ renderPicture() {
     double endClearTime = CycleTimer::currentSeconds();
 
     gDisplay.renderer->setMousePressedLocation(gDisplay.mousePressedLocation);
+    memset(gDisplay.mousePressedLocation, 0, sizeof(int) * gDisplay.width * gDisplay.height);
+
     // render the particles< into the image
     gDisplay.renderer->render();
 

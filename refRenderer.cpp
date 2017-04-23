@@ -7,7 +7,7 @@
 #include "image.h"
 #include "util.h"
 
-#define CELL_DIM 16
+#define CELL_DIM 8
 #define TIME_STEP 1
 
 RefRenderer::RefRenderer() {
@@ -17,7 +17,9 @@ RefRenderer::RefRenderer() {
     vx = NULL;
     vy = NULL;
     velocitiesX = NULL;
+    velocitiesXcopy = NULL;
     velocitiesY = NULL;
+    velocitiesYcopy = NULL;
     color = NULL;
     colorCopy = NULL;
 }
@@ -47,14 +49,29 @@ RefRenderer::~RefRenderer() {
     if (velocitiesX) {
         for (int i = 0; i < cells_per_side + 1; i++) {
             if (velocitiesX[i]) delete velocitiesX[i];
+
         }
         delete velocitiesX;
     }
+    if (velocitiesXcopy) {
+        for (int i = 0; i < cells_per_side + 1; i++) {
+            if (velocitiesXcopy[i]) delete velocitiesXcopy[i];
+
+        }
+        delete velocitiesXcopy;
+    }
+
     if (velocitiesY) {
         for (int i = 0; i < cells_per_side + 1; i++) {
             if (velocitiesY[i]) delete velocitiesY[i];
         }
         delete velocitiesY;
+    }
+    if (velocitiesYcopy) {
+        for (int i = 0; i < cells_per_side + 1; i++) {
+            if (velocitiesYcopy[i]) delete velocitiesYcopy[i];
+        }
+        delete velocitiesYcopy;
     }
     if (color) {
         for (int i = 0; i < cells_per_side + 1; i++) {
@@ -108,17 +125,33 @@ RefRenderer::setup() {
 
    cells_per_side = image->width / CELL_DIM;
    velocitiesX = new float*[cells_per_side + 1];
+   velocitiesXcopy = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     velocitiesX[i] = new float[cells_per_side + 1];
-    for (int j = 0; j < cells_per_side + 1; j++) {
-        velocitiesX[i][j] = 1.0;
+    velocitiesXcopy[i] = new float[cells_per_side + 1];
+    for (int j = 0; j < cells_per_side + 1; j++) { 
+        if (j < cells_per_side / 2) { 
+            velocitiesX[i][j] = 0.0;
+            //velocitiesXcopy[i][j] = 0.0;
+        } else {
+            velocitiesX[i][j] = 0.0;
+            //velocitiesXcopy[i][j] = 0.0;
+        }
     }
    }
    velocitiesY = new float*[cells_per_side + 1];
+   velocitiesYcopy = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     velocitiesY[i] = new float[cells_per_side + 1];
+    velocitiesYcopy[i] = new float[cells_per_side + 1];
     for (int j = 0; j < cells_per_side + 1; j++) {
-        velocitiesY[i][j] = 1.0;
+        if (j < cells_per_side / 2) {
+            velocitiesY[i][j] = 0.0;
+            //velocitiesYcopy[i][j] = 0.0;
+        } else {
+            velocitiesY[i][j] = 0.0;
+            //velocitiesYcopy[i][j] = 0.0;
+        }
     }
    }
    color = new float**[cells_per_side + 1];
@@ -126,7 +159,7 @@ RefRenderer::setup() {
     color[i] = new float*[(cells_per_side + 1)];
     for (int j = 0; j < cells_per_side + 1; j++) {
         color[i][j] = new float[4];
-        if (i % 2 == 0 && j % 2 == 0) {
+        /*if (i % 2 == 0 && j % 2 == 0) {
             color[i][j][0] = 0.4666;
             color[i][j][1] = 0.7882;
             color[i][j][2] = 0.2666;
@@ -146,7 +179,20 @@ RefRenderer::setup() {
             color[i][j][1] = 0.457;
             color[i][j][2] = 0.90630;
             color[i][j][3] = 1.0;
-        }
+        }*/
+            color[i][j][0] = 0;
+            color[i][j][1] = 0.0392;
+            color[i][j][2] = 0.1098;
+            color[i][j][3] = 1.0;
+            /*if (220 < i && i < 230 && 220 < j && j < 230) {
+                color[i][j][0] = 1.0;
+                color[i][j][1] = 0.4;
+                color[i][j][2] = 0.2;
+                color[i][j][3] = 0.5;
+
+            }*/
+
+
     }
    }
    colorCopy = new float**[cells_per_side + 1];
@@ -154,7 +200,7 @@ RefRenderer::setup() {
     colorCopy[i] = new float*[(cells_per_side + 1)];
     for (int j = 0; j < cells_per_side + 1; j++) {
         colorCopy[i][j] = new float[4];
-        if (i % 2 == 0 && j % 2 == 0) {
+        /*if (i % 2 == 0 && j % 2 == 0) {
             color[i][j][0] = 0.4666;
             color[i][j][1] = 0.7882;
             color[i][j][2] = 0.2666;
@@ -174,7 +220,19 @@ RefRenderer::setup() {
             color[i][j][1] = 0.457;
             color[i][j][2] = 0.90630;
             color[i][j][3] = 1.0;
-        }
+        }*/
+
+            /*color[i][j][0] = 0;
+            color[i][j][1] = 0.0392;
+            color[i][j][2] = 0.1098;
+            color[i][j][3] = 1.0;*/
+            /*if (220 < i && i < 230 && 220 < j && j < 230) {
+                color[i][j][0] = 1.0;
+                color[i][j][1] = 0.4;
+                color[i][j][2] = 0.2;
+                color[i][j][3] = 0.5;
+
+            }*/
     }
    }
 
@@ -182,7 +240,19 @@ RefRenderer::setup() {
 }
 
 void RefRenderer::setMousePressedLocation(int* mpl) {
-    mousePressedLocation = mpl;
+    //mousePressedLocation = mpl;
+    for (int i = 0; i < image->height * image-> width; i++) {
+        //mousePressedLocation[i] = mpl[i];
+        if (mpl[i] == 1) {
+            int grid_row = (i / image->width) / (CELL_DIM);
+            int grid_col = (i % image->width) / (CELL_DIM);
+            color[grid_row][grid_col][0] = 1.0;
+            color[grid_row][grid_col][1] = 1.0;
+            color[grid_row][grid_col][2] = 1.0;
+            color[grid_row][grid_col][3] = 1.0;
+            velocitiesY[grid_row][grid_col] = 1.0;
+        }
+    }
 }
 
 // allocOutputImage --
@@ -205,7 +275,7 @@ RefRenderer::clearImage() {
     image->clear(1.f, 1.f, 1.f, 1.f);
 }
 
-void RefRenderer::advect() {
+void RefRenderer::advectColor() {
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             for (int k = 0; k < 4; k++) {
@@ -243,9 +313,41 @@ void RefRenderer::advect() {
     }
 }
 
+void RefRenderer::advectVelocities() {
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            velocitiesXcopy[i][j] = velocitiesX[i][j];
+            velocitiesYcopy[i][j] = velocitiesY[i][j];
+        }
+    }
+
+
+    //Advecting the values in velocitiesX and velocitiesY
+    for (int row = 0; row < cells_per_side; row++) {
+        for (int col = 0; col < cells_per_side; col++) {
+           int pixelRow = row * CELL_DIM;
+           int pixelCol = col * CELL_DIM;
+           int prevPixelRow = pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM;
+           int prevPixelCol = pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM;
+           int prevCellCol = prevPixelCol / CELL_DIM;
+           int prevCellRow = prevPixelRow / CELL_DIM;
+
+           if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
+                   && prevCellCol >= 0 && prevCellRow >= 0) {
+                velocitiesX[row][col] = velocitiesXcopy[prevCellRow][prevCellCol];
+                velocitiesY[row][col] = velocitiesYcopy[prevCellRow][prevCellCol];
+           } else {
+                velocitiesX[row][col] = 0.0;
+                velocitiesY[row][col] = 0.0;
+           }
+        }
+    }
+}
+
+
 void
 RefRenderer::render() {
-    usleep(TIME_STEP*1000000);
+    //usleep(TIME_STEP*1000000);
      
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
@@ -258,8 +360,8 @@ RefRenderer::render() {
     }
 
     // Advect
-    advect();
-   
+    advectColor();
+    advectVelocities();
     
     
     // Make mouse clicked locations turn white
