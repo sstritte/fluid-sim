@@ -10,22 +10,21 @@ private:
 
     Image* image;
     int* mousePressedLocation; 
-    float** p; // pressure
-    float** vx; // velocity in left/right walls
-    float** vy; // velocity in top/bottom walls
-    int nx; // number of cells in a row
-    int ny; // number of cells in a column
 
     float** velocitiesX;
-    float** velocitiesXcopy;
     float** velocitiesY;
-    float** velocitiesYcopy;
     int cells_per_side;
     float*** color;
     float*** colorCopy;
+    float** pressures;
+    float** advectionCopy;
 
     void advectColor();
-    void advectVelocities();
+    void advectColorForward();
+    void advectColorBackward();
+    void advectQuantity(float** q);
+    void advectForward(float** q);
+    void advectBackward(float** q);
 public:
 
     RefRenderer();
