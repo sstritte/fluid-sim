@@ -225,9 +225,23 @@ void RefRenderer::setMousePressedLocation(int* mpl) {
             color[grid_row][grid_col][1] = 1.0;
             color[grid_row][grid_col][2] = 1.0;
             color[grid_row][grid_col][3] = 1.0;
-            velocitiesY[grid_row][grid_col] = 1.0;
+            velocitiesY[grid_row][grid_col] = 4.0;
         }
     }
+}
+
+void RefRenderer::setNewVelocities(double* vxs, double* vys) {
+    for (int i = 0; i < image->height * image-> width; i++) {
+        if (vxs[i] != 0.0 || vys[i] != 0.0) {
+            int grid_row = (i / image->width) / (CELL_DIM);
+            int grid_col = (i % image->width) / (CELL_DIM);
+            velocitiesX[grid_row][grid_col] = vxs[i];
+            velocitiesY[grid_row][grid_col] = vys[i];
+            printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, 
+                    grid_col, vxs[i], vys[i]);
+        }
+    }
+
 }
 
 // allocOutputImage --
@@ -254,8 +268,8 @@ void RefRenderer::advectColorBackward() {
     //Advecting the values in color
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM + CELL_DIM/2;
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
            int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
            int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
            int prevCellCol = prevPixelCol / CELL_DIM;
@@ -270,10 +284,10 @@ void RefRenderer::advectColorBackward() {
                 color[row][col][2] = colorCopy[prevCellRow][prevCellCol][2];
                 color[row][col][3] = colorCopy[prevCellRow][prevCellCol][3];
            } else {
-                color[row][col][0] = 0.0;
+                /*color[row][col][0] = 0.0;
                 color[row][col][1] = 0.0;
                 color[row][col][2] = 0.0;
-                color[row][col][3] = 0.0;   
+                color[row][col][3] = 0.0;*/   
            }
         }
     }
@@ -283,13 +297,27 @@ void RefRenderer::advectColorForward() {
     //Advecting the values in color
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM + CELL_DIM/2;
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
            int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * CELL_DIM);
            int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
            int nextCellCol = nextPixelCol / CELL_DIM;
            int nextCellRow = nextPixelRow / CELL_DIM;
 
+           int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+           int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+           int prevCellCol = prevPixelCol / CELL_DIM;
+           int prevCellRow = prevPixelRow / CELL_DIM;
+
+           if (nextCellRow != row || prevCellRow != row)    
+            printf("(%d,%d): forward is (%d,%d), backward is (%d,%d)\n", row, col, nextCellRow, nextCellCol, prevCellRow,prevCellCol);
+
+           if ((nextPixelRow != pixelRow || nextPixelCol != pixelCol) &&
+                   nextCellCol < cells_per_side && nextCellRow < cells_per_side 
+                   && nextCellCol >= 0 && nextCellRow >= 0) {
+                //printf("advecting to row %d col %d from row %d col %d\n",nextPixelRow,
+                //        nextPixelCol, pixelRow, pixelCol);
+           }
            //printf("PIXEL (%d,%d) has prev (%d,%d)\n",pixelRow,pixelCol,prevPixelRow,prevPixelCol);
            //printf("CELL (%d,%d) has prev (%d,%d)\n", row,col,prevCellRow,prevCellCol);
            if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
@@ -299,10 +327,10 @@ void RefRenderer::advectColorForward() {
                 color[nextCellRow][nextCellCol][2] = colorCopy[row][col][2];
                 color[nextCellRow][nextCellCol][3] = colorCopy[row][col][3];
            } else {
-                color[nextCellRow][nextCellCol][0] = 0.0;
+                /*color[nextCellRow][nextCellCol][0] = 0.0;
                 color[nextCellRow][nextCellCol][1] = 0.0;
                 color[nextCellRow][nextCellCol][2] = 0.0;
-                color[nextCellRow][nextCellCol][3] = 0.0;   
+                color[nextCellRow][nextCellCol][3] = 0.0;   */
            }
         }
     }
@@ -312,8 +340,8 @@ void RefRenderer::advectBackward(float** quantity) {
     //Advecting the values
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM + CELL_DIM/2;
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
            int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
            int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
            int prevCellCol = prevPixelCol / CELL_DIM;
@@ -323,7 +351,7 @@ void RefRenderer::advectBackward(float** quantity) {
                    && prevCellCol >= 0 && prevCellRow >= 0) {
                 quantity[row][col] = advectionCopy[prevCellRow][prevCellCol];
            } else {
-                quantity[row][col] = 0.0;
+                //quantity[row][col] = 0.0;
            }
         }
     }
@@ -333,8 +361,8 @@ void RefRenderer::advectForward(float** quantity) {
     //Advecting the values
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM + CELL_DIM/2;
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
            int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * CELL_DIM);
            int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
            int nextCellCol = nextPixelCol / CELL_DIM;
@@ -344,7 +372,7 @@ void RefRenderer::advectForward(float** quantity) {
                    && nextCellCol >= 0 && nextCellRow >= 0) {
                 quantity[nextCellRow][nextCellCol] = advectionCopy[row][col];
            } else {
-                quantity[nextCellRow][nextCellCol] = 0.0;
+                //quantity[nextCellRow][nextCellCol] = 0.0;
            }
         }
     }
@@ -375,25 +403,42 @@ RefRenderer::advectQuantity(float** quantity) {
 void
 RefRenderer::render() {
     //usleep(TIME_STEP*1000000);
-     
+
     // Advect
 
-    advectColor();
+    //advectColor();
+    //advectQuantity(pressures);
     advectQuantity(velocitiesX);
     advectQuantity(velocitiesY);
-    advectQuantity(pressures);
-
+        
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
             int grid_col = ((i/4) % image->width) / (CELL_DIM);
-            image->data[i] = color[grid_row][grid_col][0];
+            /*image->data[i] = color[grid_row][grid_col][0];
             image->data[i+1] = color[grid_row][grid_col][1]; 
             image->data[i+2] = color[grid_row][grid_col][2];
-            image->data[i+3] = color[grid_row][grid_col][3]; 
-    }
+            image->data[i+3] = color[grid_row][grid_col][3];*/
+            if (velocitiesX[grid_row][grid_col] != 0.0 || 
+                    velocitiesY[grid_row][grid_col] != 0.0) {
+                image->data[i] = 1.0;
+                image->data[i+1] = 1.0;
+                image->data[i+2] = 1.0;
+                image->data[i+3] = 1.0;
+            } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
+                image->data[i] = 0.8;
+                image->data[i+1] = 0.8;
+                image->data[i+2] = 1.0;
+                image->data[i+3] = 1.0;
 
-    
+            }*/ else {
+                image->data[i] = 0.0;
+                image->data[i+1] = 0.0392;
+                image->data[i+2] = 0.1098;
+                image->data[i+3] = 1.0;
+
+            }
+    } 
     // Make mouse clicked locations turn white
     /* for (int i = 0; i < 4*image->width*image->height; i+=4) {
         if (mousePressedLocation[i / 4]) {

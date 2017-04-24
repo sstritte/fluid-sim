@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <math.h>
 
 #include "circleRenderer.h"
 #include "cycleTimer.h"
@@ -15,6 +16,11 @@ static struct {
     bool printStats;
     double lastFrameTime;
     int* mousePressedLocation;
+    int prevMouseX;
+    int prevMouseY;
+    double prevMousePressTime;
+    double* newVelocitiesX;
+    double* newVelocitiesY;
 
     CircleRenderer* renderer;
 
@@ -96,15 +102,44 @@ handleKeyPress(unsigned char key, int x, int y) {
     }
 }
 
+void handleMouseClick(int button, int state, int x, int y) {
+    if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        //printf("MOUSE DOWN\n");
+        gDisplay.prevMousePressTime = CycleTimer::currentSeconds();
+        gDisplay.prevMouseX = x;
+        gDisplay.prevMouseY = y;
+    } else if(button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+        //printf("MOUSE UP\n");
+        //gDisplay.prevMousePressTime = -1; 
+    } 
+
+}
+
 // handleMouseMove --
 // 
 // Mouse event handler
 void
 handleMouseMove(int x, int y) {
-    int index = (gDisplay.height - y - 1) * gDisplay.width + x;
-    if (0 <= index && index < gDisplay.height * gDisplay.width) {
-        gDisplay.mousePressedLocation[index] = 1;
+    double mousePressTime = CycleTimer::currentSeconds();
+    //double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
+    double distX = x - gDisplay.prevMouseX;
+    double distY = y - gDisplay.prevMouseY;
+
+    int prevIndex = 
+        (gDisplay.height - gDisplay.prevMouseY - 1) * gDisplay.width 
+        + gDisplay.prevMouseX;
+    if (0 <= prevIndex && prevIndex < gDisplay.height * gDisplay.width) {
+        gDisplay.mousePressedLocation[prevIndex] = 1;
+        gDisplay.newVelocitiesX[prevIndex] = distX;
+        gDisplay.newVelocitiesY[prevIndex] = -distY; //bc screen is upside down
     }
+
+    /*printf("moved %f pixels, %f x, %f y, from %f ms ago\n", 
+            pixelDist, distX, distY, 
+            1000 * (mousePressTime - gDisplay.prevMousePressTime));*/
+    gDisplay.prevMouseX = x;
+    gDisplay.prevMouseY = y;
+    gDisplay.prevMousePressTime = mousePressTime;
 }
 
 // renderPicture --
@@ -120,12 +155,16 @@ renderPicture() {
 
     double endClearTime = CycleTimer::currentSeconds();
 
-    gDisplay.renderer->setMousePressedLocation(gDisplay.mousePressedLocation);
+    // SEND RELEVANT INFO BEFORE RENDERING
+    //gDisplay.renderer->setMousePressedLocation(gDisplay.mousePressedLocation);
     memset(gDisplay.mousePressedLocation, 0, sizeof(int) * gDisplay.width * gDisplay.height);
 
-    // render the particles< into the image
-    gDisplay.renderer->render();
+    gDisplay.renderer->setNewVelocities(gDisplay.newVelocitiesX, gDisplay.newVelocitiesY);
+    memset(gDisplay.newVelocitiesX, 0, sizeof(double) * gDisplay.width * gDisplay.height);
+    memset(gDisplay.newVelocitiesY, 0, sizeof(double) * gDisplay.width * gDisplay.height);
 
+    // RENDER THE PARTICLES INTO THE IMAGE
+    gDisplay.renderer->render();
     double endRenderTime = CycleTimer::currentSeconds();
 
     if (gDisplay.printStats) {
@@ -147,13 +186,20 @@ startRendererWithDisplay(CircleRenderer* renderer) {
     gDisplay.height = img->height;
     gDisplay.mousePressedLocation = new int[img->width * img->height];
     memset(gDisplay.mousePressedLocation, 0, sizeof(int) * img->width * img->height);
+    printf("before\n");
+    gDisplay.newVelocitiesX = new double[img->width * img->height];
+    memset(gDisplay.newVelocitiesX, 0, sizeof(double) * img->width * img->height);
+    gDisplay.newVelocitiesY = new double[img->width * img->height];
+    memset(gDisplay.newVelocitiesY, 0, sizeof(double) * img->width * img->height);
+    printf("afte\n");
 
     // configure GLUT
     glutInitWindowSize(gDisplay.width, gDisplay.height);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-    glutCreateWindow("CMU 15-418 Assignment 2 - Circle Renderer");
+    glutCreateWindow("CMU 15-418 Final Project - Fluid Simulator");
     glutDisplayFunc(handleDisplay);
     glutKeyboardFunc(handleKeyPress);
+    glutMouseFunc(handleMouseClick);
     glutMotionFunc(handleMouseMove);
     glutMainLoop();
 }

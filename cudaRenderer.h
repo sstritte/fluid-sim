@@ -26,6 +26,8 @@ public:
     
     void setMousePressedLocation(int* mpl);
 
+    void setNewVelocities(double* vxs, double* vys);
+
     void allocOutputImage(int width, int height);
 
     void clearImage();

@@ -45,7 +45,11 @@ void
 CudaRenderer::setMousePressedLocation(int* mpl) {
     mousePressedLocation = mpl;
 }
-
+ 
+void 
+CudaRenderer::setNewVelocities(double* vxs, double* vys) {
+    // nothing yet
+}
 // allocOutputImage --
 //
 // Allocate buffer the renderer will render into.  Check status of
