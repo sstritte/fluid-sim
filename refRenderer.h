@@ -25,6 +25,7 @@ private:
     void advectQuantity(float** q);
     void advectForward(float** q);
     void advectBackward(float** q);
+    void applyPressure();
 public:
 
     RefRenderer();
@@ -36,7 +37,7 @@ public:
     
     void setMousePressedLocation(int* mpl);
 
-    void setNewVelocities(double* vxs, double* vys);
+    void setNewQuantities(double* vxs, double* vys, double* ps);
 
     void allocOutputImage(int width, int height);
 

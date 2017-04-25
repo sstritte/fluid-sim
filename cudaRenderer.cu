@@ -47,7 +47,7 @@ CudaRenderer::setMousePressedLocation(int* mpl) {
 }
  
 void 
-CudaRenderer::setNewVelocities(double* vxs, double* vys) {
+CudaRenderer::setNewQuantities(double* vxs, double* vys, double* ps) {
     // nothing yet
 }
 // allocOutputImage --

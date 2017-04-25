@@ -215,7 +215,7 @@ RefRenderer::setup() {
 
 void RefRenderer::setMousePressedLocation(int* mpl) {
     //mousePressedLocation = mpl;
-    for (int i = 0; i < image->height * image-> width; i++) {
+    /*for (int i = 0; i < image->height * image-> width; i++) {
         //mousePressedLocation[i] = mpl[i];
         if (mpl[i] == 1) {
             int grid_row = (i / image->width) / (CELL_DIM);
@@ -225,22 +225,37 @@ void RefRenderer::setMousePressedLocation(int* mpl) {
             color[grid_row][grid_col][1] = 1.0;
             color[grid_row][grid_col][2] = 1.0;
             color[grid_row][grid_col][3] = 1.0;
-            velocitiesY[grid_row][grid_col] = 4.0;
+            //velocitiesY[grid_row][grid_col] = 4.0;
+            pressures[grid_row][grid_col] = 4.0;
         }
-    }
+    }*/
 }
 
-void RefRenderer::setNewVelocities(double* vxs, double* vys) {
+void RefRenderer::setNewQuantities(double* vxs, double* vys, double* ps) {
     for (int i = 0; i < image->height * image-> width; i++) {
-        if (vxs[i] != 0.0 || vys[i] != 0.0) {
+       /*if (vxs[i] != 0.0 || vys[i] != 0.0) {
             int grid_row = (i / image->width) / (CELL_DIM);
             int grid_col = (i % image->width) / (CELL_DIM);
             velocitiesX[grid_row][grid_col] = vxs[i];
             velocitiesY[grid_row][grid_col] = vys[i];
             printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, 
                     grid_col, vxs[i], vys[i]);
+        }*/
+
+        float p = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
+        int grid_row = (i / image->width) / (CELL_DIM);
+        int grid_col = (i % image->width) / (CELL_DIM);
+        if (vxs[i] != 0.0 || vys[i] != 0.0) {
+            velocitiesX[grid_row][grid_col] = vxs[i];
+            velocitiesY[grid_row][grid_col] = vys[i];
         }
+        if (ps[i] != 0.0) {
+            pressures[grid_row][grid_col] = p;
+            if (p != 0) printf("setting pressure of (%d,%d) to %f\n", grid_row, grid_col, p);
+        }
+
     }
+    applyPressure();
 
 }
 
@@ -400,17 +415,37 @@ RefRenderer::advectQuantity(float** quantity) {
     advectForward(quantity);
     advectBackward(quantity);
 }
+
+void
+RefRenderer::applyPressure() {
+    for (int i = 0; i < cells_per_side; i ++) {
+        for (int j = 0; j < cells_per_side; j++) {
+            float force_x = (pressures[i][j] - pressures[i][j+1]);
+            float force_y = (pressures[i][j] - pressures[i+1][j]);
+            velocitiesX[i][j] += force_x;
+            velocitiesX[i][j+1] += force_x;
+            velocitiesY[i][j] += force_y;
+            velocitiesY[i+1][j] += force_y;
+            if (force_x != 0) printf("adding force_x %f to (%d,%d)\n", force_x, i, j);
+        }
+    }
+}
+
 void
 RefRenderer::render() {
     //usleep(TIME_STEP*1000000);
 
     // Advect
 
-    //advectColor();
-    //advectQuantity(pressures);
+          //advectColor();
+    //applyPressure();
     advectQuantity(velocitiesX);
     advectQuantity(velocitiesY);
-        
+    //advectQuantity(pressures);
+    applyPressure(); 
+    advectQuantity(pressures);
+
+
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
@@ -420,10 +455,19 @@ RefRenderer::render() {
             image->data[i+2] = color[grid_row][grid_col][2];
             image->data[i+3] = color[grid_row][grid_col][3];*/
             if (velocitiesX[grid_row][grid_col] != 0.0 || 
-                    velocitiesY[grid_row][grid_col] != 0.0) {
-                image->data[i] = 1.0;
-                image->data[i+1] = 1.0;
-                image->data[i+2] = 1.0;
+                  velocitiesY[grid_row][grid_col] != 0.0) {
+                float vx = velocitiesX[grid_row][grid_col];
+                float vy = velocitiesY[grid_row][grid_col];
+                float v = sqrt(vx * vx + vy * vy);
+                float s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
+                //printf("%f !!!!", s);
+
+           // if (pressures[grid_row][grid_col] != 0.0) {
+                //printf("%f,%f    ", velocitiesX[grid_row][grid_col],velocitiesY[grid_row][grid_col]);
+                //printf("%f    ", pressures[grid_row][grid_col]);
+                image->data[i] = 1.0-s;
+                image->data[i+1] = 0.0;
+                image->data[i+2] = 0.0;
                 image->data[i+3] = 1.0;
             } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
                 image->data[i] = 0.8;
@@ -438,7 +482,10 @@ RefRenderer::render() {
                 image->data[i+3] = 1.0;
 
             }
-    } 
+    }
+
+
+  
     // Make mouse clicked locations turn white
     /* for (int i = 0; i < 4*image->width*image->height; i+=4) {
         if (mousePressedLocation[i / 4]) {

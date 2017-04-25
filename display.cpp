@@ -21,7 +21,7 @@ static struct {
     double prevMousePressTime;
     double* newVelocitiesX;
     double* newVelocitiesY;
-
+    double* newPressures;
     CircleRenderer* renderer;
 
 } gDisplay;
@@ -124,14 +124,16 @@ handleMouseMove(int x, int y) {
     //double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
     double distX = x - gDisplay.prevMouseX;
     double distY = y - gDisplay.prevMouseY;
+    double d = sqrt(distX * distX + distY * distY);
 
     int prevIndex = 
         (gDisplay.height - gDisplay.prevMouseY - 1) * gDisplay.width 
         + gDisplay.prevMouseX;
     if (0 <= prevIndex && prevIndex < gDisplay.height * gDisplay.width) {
         gDisplay.mousePressedLocation[prevIndex] = 1;
-        gDisplay.newVelocitiesX[prevIndex] = distX;
-        gDisplay.newVelocitiesY[prevIndex] = -distY; //bc screen is upside down
+        gDisplay.newVelocitiesX[prevIndex] = distX / d;
+        gDisplay.newVelocitiesY[prevIndex] = -distY / d; //bc screen is upside down
+        gDisplay.newPressures[prevIndex] = 1.0;
     }
 
     /*printf("moved %f pixels, %f x, %f y, from %f ms ago\n", 
@@ -159,7 +161,7 @@ renderPicture() {
     //gDisplay.renderer->setMousePressedLocation(gDisplay.mousePressedLocation);
     memset(gDisplay.mousePressedLocation, 0, sizeof(int) * gDisplay.width * gDisplay.height);
 
-    gDisplay.renderer->setNewVelocities(gDisplay.newVelocitiesX, gDisplay.newVelocitiesY);
+    gDisplay.renderer->setNewQuantities(gDisplay.newVelocitiesX, gDisplay.newVelocitiesY, gDisplay.newPressures);
     memset(gDisplay.newVelocitiesX, 0, sizeof(double) * gDisplay.width * gDisplay.height);
     memset(gDisplay.newVelocitiesY, 0, sizeof(double) * gDisplay.width * gDisplay.height);
 
@@ -191,7 +193,9 @@ startRendererWithDisplay(CircleRenderer* renderer) {
     memset(gDisplay.newVelocitiesX, 0, sizeof(double) * img->width * img->height);
     gDisplay.newVelocitiesY = new double[img->width * img->height];
     memset(gDisplay.newVelocitiesY, 0, sizeof(double) * img->width * img->height);
-    printf("afte\n");
+    gDisplay.newPressures = new double[img->width * img->height];
+    memset(gDisplay.newPressures, 0, sizeof(double) * img->width * img->height);
+    printf("after\n");
 
     // configure GLUT
     glutInitWindowSize(gDisplay.width, gDisplay.height);
