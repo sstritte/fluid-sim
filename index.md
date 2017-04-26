@@ -56,7 +56,8 @@ However, the current state of our simulator does not look as good as we hoped (A
 
 We could spend a couple more days trying really hard to make the baseline look decently like fluid, and then move on to parallelizing the implementation (even though it might not look great). We're just concerned that it won't even look like a fluid simulator and we'd just be parallelizing something useless. 
 
-###Updated Schedule (all tasks will be done together)
+### Updated Schedule (all tasks will be done together)
+
 April 26 - 27: Try to salvage baseline to look believable
 
 April 28 - 30: Translate parallelizable computations of the algorithm into CUDA
