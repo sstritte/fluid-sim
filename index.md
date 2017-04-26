@@ -46,3 +46,27 @@ May 4 - 9: Further improve performance to achieve acceptable speedup
 
 May 10 - 11: Implement demo widget, Prepare for presentation
 
+
+
+
+## Checkpoint (4/25/16)
+We have been working on implementing the baseline simulation (sequential CPU implementation). This requires reading a lot of research papers and articles about the physics behind the fluid motion, which is pretty complicated. We stripped down the OpenGL code from Assignment 2 to create our framework for rendering our simulation, with timing code to compare the reference and CUDA implementation in place.
+
+However, the current state of our simulator does not look as good as we hoped (AKA it doesn't actually look like fluid yet). We've spent quite some time trying to figure out and implement the physics, but our simulation is far from realistic. We anticipate that we will have to spend a lot more time to even create a realistic baseline. We found some example projects online, but the contents are extremely sophisticated in terms of physics and hard to replicate. 
+
+We could spend a couple more days trying really hard to make the baseline look decently like fluid, and then move on to parallelizing the implementation (even though it might not look great). We're just concerned that it won't even look like a fluid simulator and we'd just be parallelizing something useless. 
+
+###Updated Schedule (all tasks will be done together)
+April 26 - 27: Try to salvage baseline to look believable
+
+April 28 - 30: Translate parallelizable computations of the algorithm into CUDA
+
+May 1 - 3: Determine optimal distribution of work among cores
+
+May 4 - 9: Further improve performance to achieve acceptable speedup
+
+May 10 - 11: Polish demo, prepare for presentation
+
+
+
+
