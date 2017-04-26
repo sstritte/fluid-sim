@@ -17,6 +17,8 @@ private:
     float*** color;
     float*** colorCopy;
     float** pressures;
+    float** advectionCopyX;
+    float** advectionCopyY;
     float** advectionCopy;
 
     void advectColor();
@@ -26,6 +28,8 @@ private:
     void advectForward(float** q);
     void advectBackward(float** q);
     void applyPressure();
+    void advectVelocityForward();
+    void advectVelocityBackward();
 public:
 
     RefRenderer();

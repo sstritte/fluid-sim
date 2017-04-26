@@ -19,6 +19,8 @@ RefRenderer::RefRenderer() {
     color = NULL;
     colorCopy = NULL;
     pressures = NULL;
+    advectionCopyX = NULL;
+    advectionCopyY = NULL;
     advectionCopy = NULL;
 }
 
@@ -46,6 +48,18 @@ RefRenderer::~RefRenderer() {
             if (pressures[i]) delete pressures[i];
         }
         delete pressures;
+    }
+    if (advectionCopyX) {
+        for (int i = 0; i < cells_per_side + 1; i++) {
+            if (advectionCopyX[i]) delete advectionCopyX[i];
+        }
+        delete advectionCopyX;
+    }
+    if (advectionCopyY) {
+        for (int i = 0; i < cells_per_side + 1; i++) {
+            if (advectionCopyY[i]) delete advectionCopyY[i];
+        }
+        delete advectionCopyY;
     }
     if (advectionCopy) {
         for (int i = 0; i < cells_per_side + 1; i++) {
@@ -122,11 +136,19 @@ RefRenderer::setup() {
         }
     }
    }
-    
    advectionCopy = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     advectionCopy[i] = new float[cells_per_side + 1];
    }
+   advectionCopyX = new float*[cells_per_side + 1];
+   for (int i = 0; i < cells_per_side + 1; i++) {
+    advectionCopyX[i] = new float[cells_per_side + 1];
+   }
+   advectionCopyY = new float*[cells_per_side + 1];
+   for (int i = 0; i < cells_per_side + 1; i++) {
+    advectionCopyY[i] = new float[cells_per_side + 1];
+   }
+
 
    color = new float**[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
@@ -252,7 +274,7 @@ void RefRenderer::setNewQuantities(double* vxs, double* vys, double* ps) {
         }
         if (ps[i] != 0.0) {
             pressures[grid_row][grid_col] = p;// / 10.0;
-            if (p != 0) printf("setting pressure of (%d,%d) to %f\n", grid_row, grid_col, p);
+            ///if (p != 0) printf("setting pressure of (%d,%d) to %f\n", grid_row, grid_col, p);
         }
 
     }
@@ -357,8 +379,8 @@ void RefRenderer::advectBackward(float** quantity) {
         for (int col = 0; col < cells_per_side; col++) {
            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-           int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
-           int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+           int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * 1/CELL_DIM);
+           int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * 1/CELL_DIM);
            int prevCellCol = prevPixelCol / CELL_DIM;
            int prevCellRow = prevPixelRow / CELL_DIM;
 
@@ -382,8 +404,8 @@ void RefRenderer::advectForward(float** quantity) {
         for (int col = 0; col < cells_per_side; col++) {
            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-           int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * CELL_DIM);
-           int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+           int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * 1/CELL_DIM);
+           int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * 1/CELL_DIM);
            int nextCellCol = nextPixelCol / CELL_DIM;
            int nextCellRow = nextPixelRow / CELL_DIM;
 
@@ -435,6 +457,72 @@ RefRenderer::applyPressure() {
     }
 }
 
+
+
+void RefRenderer::advectVelocityForward() {
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            advectionCopyX[i][j] = velocitiesX[i][j];
+            advectionCopyY[i][j] = velocitiesY[i][j];
+        }
+    }
+
+    for (int row = 0; row < cells_per_side; row++) {
+        for (int col = 0; col < cells_per_side; col++) {
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
+           int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+           int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+           int nextCellCol = nextPixelCol / CELL_DIM;
+           int nextCellRow = nextPixelRow / CELL_DIM;
+
+           if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
+                   && nextCellCol >= 0 && nextCellRow >= 0) {
+                velocitiesX[nextCellRow][nextCellCol] = advectionCopyX[row][col];
+                velocitiesY[nextCellRow][nextCellCol] = advectionCopyY[row][col];
+           } else {
+                //quantity[nextCellRow][nextCellCol] = 0.0;
+           }
+        }
+    }
+
+}
+
+void
+RefRenderer::advectVelocityBackward() {
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            advectionCopyX[i][j] = velocitiesX[i][j];
+            advectionCopyY[i][j] = velocitiesY[i][j];
+        }
+    }
+
+    for (int row = 0; row < cells_per_side; row++) {
+        for (int col = 0; col < cells_per_side; col++) {
+           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
+           int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+           int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+           int prevCellCol = prevPixelCol / CELL_DIM;
+           int prevCellRow = prevPixelRow / CELL_DIM;
+
+           if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
+                   && prevCellCol >= 0 && prevCellRow >= 0) {
+                velocitiesX[row][col] = advectionCopyX[prevCellRow][prevCellCol];
+                velocitiesY[row][col] = advectionCopyY[prevCellRow][prevCellCol];
+           } else {
+                //quantity[row][col] = 0.0;
+           }
+           if (prevCellCol == col && prevCellRow == row) {
+                // you don't move so just disappear
+                velocitiesX[row][col] = 0;
+                velocitiesY[row][col] = 0;
+           }
+        }
+    }
+
+}
+
 void
 RefRenderer::render() {
     //usleep(TIME_STEP*1000000);
@@ -444,11 +532,16 @@ RefRenderer::render() {
           //advectColor();
     //applyPressure();
     //advectQuantity(pressures);
-    //applyPressure(); 
+   // applyPressure(); 
     //advectQuantity(pressures);
 
-    advectQuantity(velocitiesX);
-    advectQuantity(velocitiesY);
+    //advectQuantity(velocitiesX);
+    //advectQuantity(velocitiesY);
+    //
+
+    advectVelocityForward();
+    advectVelocityBackward();
+
 
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
@@ -469,9 +562,9 @@ RefRenderer::render() {
            // if (pressures[grid_row][grid_col] != 0.0) {
                 //printf("%f,%f    ", velocitiesX[grid_row][grid_col],velocitiesY[grid_row][grid_col]);
                 //printf("%f    ", pressures[grid_row][grid_col]);
-                image->data[i] = 1.0;//s;//1.0-s;
+                image->data[i] = 0.0;//s;//1.0-s;
                 image->data[i+1] = 0.0;
-                image->data[i+2] = 0.0;
+                image->data[i+2] = 1.0;
                 image->data[i+3] = 1.0;
             } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
                 image->data[i] = 0.8;
