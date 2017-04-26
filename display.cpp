@@ -121,24 +121,54 @@ void handleMouseClick(int button, int state, int x, int y) {
 void
 handleMouseMove(int x, int y) {
     double mousePressTime = CycleTimer::currentSeconds();
-    //double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
+    double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
     double distX = x - gDisplay.prevMouseX;
     double distY = y - gDisplay.prevMouseY;
     double d = sqrt(distX * distX + distY * distY);
+    double CLAMP_MAX_DIST = 50.0;
+
+    int prevMouseX = gDisplay.prevMouseX;
+    int prevMouseY = gDisplay.prevMouseY;
 
     int prevIndex = 
-        (gDisplay.height - gDisplay.prevMouseY - 1) * gDisplay.width 
-        + gDisplay.prevMouseX;
+        (gDisplay.height - prevMouseY - 1) * gDisplay.width + prevMouseX;
+    int curIndex = (gDisplay.height - y - 1) * gDisplay.width + x;
+
+    double slope = distY/distX;
+    int py = prevMouseY;
+
+    if (prevMouseX < x) {
+        printf("prevMouseX < x, slope is %f\n", slope);
+        for (int px = prevMouseX; px < x; px++) {
+            py = prevMouseY + (px - prevMouseX) * slope;
+            int index = (gDisplay.height - py - 1) * gDisplay.width + px;
+            gDisplay.newVelocitiesX[index] = 
+                distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
+            gDisplay.newVelocitiesY[index] = 
+                distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
+        }
+    } else {
+        for (int px = prevMouseX; px > x; px--) {
+            py = prevMouseY + (px - prevMouseX) * slope;
+            int index = (gDisplay.height - py - 1) * gDisplay.width + px;
+            gDisplay.newVelocitiesX[index] = 
+                distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
+            gDisplay.newVelocitiesY[index] = 
+                distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
+        }
+    }
+
+
     if (0 <= prevIndex && prevIndex < gDisplay.height * gDisplay.width) {
         gDisplay.mousePressedLocation[prevIndex] = 1;
-        gDisplay.newVelocitiesX[prevIndex] = distX / d;
-        gDisplay.newVelocitiesY[prevIndex] = -distY / d; //bc screen is upside down
+        gDisplay.newVelocitiesX[prevIndex] = 
+            distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
+        gDisplay.newVelocitiesY[prevIndex] = 
+            distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
         gDisplay.newPressures[prevIndex] = 1.0;
     }
 
-    /*printf("moved %f pixels, %f x, %f y, from %f ms ago\n", 
-            pixelDist, distX, distY, 
-            1000 * (mousePressTime - gDisplay.prevMousePressTime));*/
+    printf("moved %f pixels, %f x, %f y\n",       pixelDist, distX, distY); 
     gDisplay.prevMouseX = x;
     gDisplay.prevMouseY = y;
     gDisplay.prevMousePressTime = mousePressTime;
