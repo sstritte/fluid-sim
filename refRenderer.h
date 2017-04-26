@@ -20,6 +20,7 @@ private:
     float** advectionCopyX;
     float** advectionCopyY;
     float** advectionCopy;
+    float** divergence;
 
     void advectColor();
     void advectColorForward();
@@ -30,6 +31,9 @@ private:
     void applyPressure();
     void advectVelocityForward();
     void advectVelocityBackward();
+    void applyDivergence();
+    void pressureSolve();
+    void pressureGradient();
 public:
 
     RefRenderer();

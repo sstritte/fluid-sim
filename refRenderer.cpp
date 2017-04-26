@@ -22,6 +22,7 @@ RefRenderer::RefRenderer() {
     advectionCopyX = NULL;
     advectionCopyY = NULL;
     advectionCopy = NULL;
+    divergence = NULL;
 }
 
 RefRenderer::~RefRenderer() {
@@ -66,6 +67,12 @@ RefRenderer::~RefRenderer() {
             if (advectionCopy[i]) delete advectionCopy[i];
         }
         delete advectionCopy;
+    }
+    if (divergence) {
+        for (int i = 0; i < cells_per_side + 1; i++) {
+            if (divergence[i]) delete divergence[i];
+        }
+        delete divergence;
     }
 
     if (color) {
@@ -148,7 +155,10 @@ RefRenderer::setup() {
    for (int i = 0; i < cells_per_side + 1; i++) {
     advectionCopyY[i] = new float[cells_per_side + 1];
    }
-
+   divergence= new float*[cells_per_side + 1];
+   for (int i = 0; i < cells_per_side + 1; i++) {
+    divergence[i] = new float[cells_per_side + 1];
+   }
 
    color = new float**[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
@@ -520,8 +530,71 @@ RefRenderer::advectVelocityBackward() {
            }
         }
     }
+}
+
+void
+RefRenderer::applyDivergence() {
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            if (i > 0) L = velocitiesX[i-1][j];
+            if (i < cells_per_side) R = velocitiesX[i+1][j];
+            if (j > 0) T = velocitiesY[i][j+1];
+            if (j < cells_per_side) B = velocitiesY[i][j-1];
+            divergence[i][j] = 0.5*((R-L) + (T-B));   
+        }
+    }
+}
+
+void
+RefRenderer::pressureSolve() {
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+    float** tempPressure = new float*[cells_per_side + 1];
+    for(int i = 0; i < cells_per_side+1; i++) {
+        tempPressure[i] = new float[cells_per_side+1];
+    }
+
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            if (i > 0) L = pressures[i-1][j];
+            if (i < cells_per_side) R = pressures[i+1][j];
+            if (j > 0) T = pressures[i][j+1];
+            if (j < cells_per_side) B = pressures[i][j-1];
+            tempPressure[i][j] = (L + R + B + T + -1.0 * divergence[i][j]) * .25;
+        }
+    }
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            pressures[i][j] = tempPressure[i][j];
+        }
+    }
 
 }
+
+void
+RefRenderer::pressureGradient() {
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            if (i > 0) L = pressures[i-1][j];
+            if (i < cells_per_side) R = pressures[i+1][j];
+            if (j > 0) T = pressures[i][j+1];
+            if (j < cells_per_side) B = pressures[i][j-1];
+            velocitiesX[i][j] = velocitiesX[i][j] - 0.5*(R - L);
+            velocitiesY[i][j] = velocitiesY[i][j] - 0.5*(T - B);
+        }
+    }
+}
+
 
 void
 RefRenderer::render() {
@@ -541,8 +614,10 @@ RefRenderer::render() {
 
     advectVelocityForward();
     advectVelocityBackward();
-
-
+    applyDivergence();
+    
+    pressureSolve();
+    pressureGradient();
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
@@ -551,12 +626,13 @@ RefRenderer::render() {
             image->data[i+1] = color[grid_row][grid_col][1]; 
             image->data[i+2] = color[grid_row][grid_col][2];
             image->data[i+3] = color[grid_row][grid_col][3];*/
-            if (velocitiesX[grid_row][grid_col] != 0.0 || 
-                  velocitiesY[grid_row][grid_col] != 0.0) {
-                float vx = velocitiesX[grid_row][grid_col];
-                float vy = velocitiesY[grid_row][grid_col];
-                float v = sqrt(vx * vx + vy * vy);
-                float s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
+            float vx = velocitiesX[grid_row][grid_col];
+            float vy = velocitiesY[grid_row][grid_col];
+            float v = sqrt(vx * vx + vy * vy);
+            float s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
+            if ((velocitiesX[grid_row][grid_col] != 0.0 || 
+                  velocitiesY[grid_row][grid_col] != 0.0) && s >= 0.1) {
+           
                 //printf("%f !!!!", s);
 
            // if (pressures[grid_row][grid_col] != 0.0) {
@@ -564,7 +640,7 @@ RefRenderer::render() {
                 //printf("%f    ", pressures[grid_row][grid_col]);
                 image->data[i] = 0.0;//s;//1.0-s;
                 image->data[i+1] = 0.0;
-                image->data[i+2] = 1.0;
+                image->data[i+2] = s;//1.0;
                 image->data[i+3] = 1.0;
             } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
                 image->data[i] = 0.8;

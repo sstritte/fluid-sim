@@ -138,7 +138,7 @@ handleMouseMove(int x, int y) {
     int py = prevMouseY;
 
     if (prevMouseX < x) {
-        printf("prevMouseX < x, slope is %f\n", slope);
+        //printf("prevMouseX < x, slope is %f\n", slope);
         for (int px = prevMouseX; px < x; px++) {
             py = prevMouseY + (px - prevMouseX) * slope;
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
@@ -168,7 +168,7 @@ handleMouseMove(int x, int y) {
         gDisplay.newPressures[prevIndex] = 1.0;
     }
 
-    printf("moved %f pixels, %f x, %f y\n",       pixelDist, distX, distY); 
+    //printf("moved %f pixels, %f x, %f y\n",       pixelDist, distX, distY); 
     gDisplay.prevMouseX = x;
     gDisplay.prevMouseY = y;
     gDisplay.prevMousePressTime = mousePressTime;
