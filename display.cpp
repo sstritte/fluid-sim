@@ -120,6 +120,7 @@ void handleMouseClick(int button, int state, int x, int y) {
 // Mouse event handler
 void
 handleMouseMove(int x, int y) {
+    //printf("%d, %d\n", x,y);
     double mousePressTime = CycleTimer::currentSeconds();
     double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
     double distX = x - gDisplay.prevMouseX;
@@ -135,36 +136,46 @@ handleMouseMove(int x, int y) {
     int curIndex = (gDisplay.height - y - 1) * gDisplay.width + x;
 
     double slope = distY/distX;
-    int py = prevMouseY;
-
+    // fill in the lines in the x direction
     if (prevMouseX < x) {
         //printf("prevMouseX < x, slope is %f\n", slope);
         for (int px = prevMouseX; px < x; px++) {
-            py = prevMouseY + (px - prevMouseX) * slope;
+            int py = prevMouseY + (px - prevMouseX) * slope;
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = 
-                distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
-            gDisplay.newVelocitiesY[index] = 
-                distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
+            gDisplay.newVelocitiesX[index] = distX; 
+            gDisplay.newVelocitiesY[index] = -distY; 
         }
     } else {
         for (int px = prevMouseX; px > x; px--) {
-            py = prevMouseY + (px - prevMouseX) * slope;
+            int py = prevMouseY + (px - prevMouseX) * slope;
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = 
-                distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
-            gDisplay.newVelocitiesY[index] = 
-                distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
+            gDisplay.newVelocitiesX[index] = distX;
+            gDisplay.newVelocitiesY[index] = -distY; 
+        }
+    }
+    // fill in the lines in the y direction
+    if (prevMouseY < y) {
+        //printf("prevMouseX < x, slope is %f\n", slope);
+        for (int py = prevMouseY; py < y; py++) {
+            int px = prevMouseX + (py - prevMouseY) * (1/slope);
+            int index = (gDisplay.height - py - 1) * gDisplay.width + px;
+            gDisplay.newVelocitiesX[index] = distX; 
+            gDisplay.newVelocitiesY[index] = -distY; 
+        }
+    } else {
+        for (int py = prevMouseY; py > y; py--) {
+            int px = prevMouseX + (py - prevMouseY) * (1/slope);
+            int index = (gDisplay.height - py - 1) * gDisplay.width + px;
+            gDisplay.newVelocitiesX[index] = distX;
+            gDisplay.newVelocitiesY[index] = -distY; 
         }
     }
 
 
     if (0 <= prevIndex && prevIndex < gDisplay.height * gDisplay.width) {
         gDisplay.mousePressedLocation[prevIndex] = 1;
-        gDisplay.newVelocitiesX[prevIndex] = 
-            distX < CLAMP_MAX_DIST ? distX : CLAMP_MAX_DIST; 
-        gDisplay.newVelocitiesY[prevIndex] = 
-            distY < CLAMP_MAX_DIST ? -distY : -CLAMP_MAX_DIST;
+        gDisplay.newVelocitiesX[prevIndex] = distX; 
+        gDisplay.newVelocitiesY[prevIndex] = -distY;
         gDisplay.newPressures[prevIndex] = 1.0;
     }
 

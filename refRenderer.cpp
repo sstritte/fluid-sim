@@ -107,6 +107,7 @@ RefRenderer::getImage() {
 
 void
 RefRenderer::setup() {
+    printf("SETUP\n");
    cells_per_side = image->width / CELL_DIM;
    velocitiesX = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
@@ -265,27 +266,19 @@ void RefRenderer::setMousePressedLocation(int* mpl) {
 
 void RefRenderer::setNewQuantities(double* vxs, double* vys, double* ps) {
     for (int i = 0; i < image->height * image-> width; i++) {
-       /*if (vxs[i] != 0.0 || vys[i] != 0.0) {
-            int grid_row = (i / image->width) / (CELL_DIM);
-            int grid_col = (i % image->width) / (CELL_DIM);
-            velocitiesX[grid_row][grid_col] = vxs[i];
-            velocitiesY[grid_row][grid_col] = vys[i];
-            printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, 
-                    grid_col, vxs[i], vys[i]);
-        }*/
-        // vxs and vys values will be between 0.0 and 50.0
-
         float p = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
         int grid_row = (i / image->width) / (CELL_DIM);
         int grid_col = (i % image->width) / (CELL_DIM);
         if (vxs[i] != 0.0 || vys[i] != 0.0) {
             velocitiesX[grid_row][grid_col] = vxs[i];/// 10.0;
             velocitiesY[grid_row][grid_col] = vys[i];// / 10.0;
+            //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, 
+            //        grid_col, vxs[i], vys[i]);
         }
-        if (ps[i] != 0.0) {
+        /*if (ps[i] != 0.0) {
             pressures[grid_row][grid_col] = p;// / 10.0;
             ///if (p != 0) printf("setting pressure of (%d,%d) to %f\n", grid_row, grid_col, p);
-        }
+        }*/
 
     }
 
@@ -490,9 +483,7 @@ void RefRenderer::advectVelocityForward() {
                    && nextCellCol >= 0 && nextCellRow >= 0) {
                 velocitiesX[nextCellRow][nextCellCol] = advectionCopyX[row][col];
                 velocitiesY[nextCellRow][nextCellCol] = advectionCopyY[row][col];
-           } else {
-                //quantity[nextCellRow][nextCellCol] = 0.0;
-           }
+           } 
         }
     }
 
@@ -500,12 +491,12 @@ void RefRenderer::advectVelocityForward() {
 
 void
 RefRenderer::advectVelocityBackward() {
-    for (int i = 0; i < cells_per_side + 1; i++) {
+    /*for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             advectionCopyX[i][j] = velocitiesX[i][j];
             advectionCopyY[i][j] = velocitiesY[i][j];
         }
-    }
+    }*/
 
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
@@ -520,9 +511,7 @@ RefRenderer::advectVelocityBackward() {
                    && prevCellCol >= 0 && prevCellRow >= 0) {
                 velocitiesX[row][col] = advectionCopyX[prevCellRow][prevCellCol];
                 velocitiesY[row][col] = advectionCopyY[prevCellRow][prevCellCol];
-           } else {
-                //quantity[row][col] = 0.0;
-           }
+           } 
            if (prevCellCol == col && prevCellRow == row) {
                 // you don't move so just disappear
                 velocitiesX[row][col] = 0;
@@ -540,10 +529,10 @@ RefRenderer::applyDivergence() {
     float T = 0.0;
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
-            if (i > 0) L = velocitiesX[i-1][j];
-            if (i < cells_per_side) R = velocitiesX[i+1][j];
-            if (j > 0) T = velocitiesY[i][j+1];
-            if (j < cells_per_side) B = velocitiesY[i][j-1];
+            if (i > 0) T = velocitiesY[i-1][j];
+            if (i < cells_per_side) B = velocitiesY[i+1][j];
+            if (j < cells_per_side) R = velocitiesX[i][j+1];
+            if (j > 0) L = velocitiesX[i][j-1];
             divergence[i][j] = 0.5*((R-L) + (T-B));   
         }
     }
@@ -562,10 +551,10 @@ RefRenderer::pressureSolve() {
 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
-            if (i > 0) L = pressures[i-1][j];
-            if (i < cells_per_side) R = pressures[i+1][j];
-            if (j > 0) T = pressures[i][j+1];
-            if (j < cells_per_side) B = pressures[i][j-1];
+            if (i > 0) T = pressures[i-1][j];
+            if (i < cells_per_side) B = pressures[i+1][j];
+            if (j < cells_per_side) R = pressures[i][j+1];
+            if (j > 0) L = pressures[i][j-1];
             tempPressure[i][j] = (L + R + B + T + -1.0 * divergence[i][j]) * .25;
         }
     }
@@ -585,12 +574,15 @@ RefRenderer::pressureGradient() {
     float T = 0.0;
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
-            if (i > 0) L = pressures[i-1][j];
-            if (i < cells_per_side) R = pressures[i+1][j];
-            if (j > 0) T = pressures[i][j+1];
-            if (j < cells_per_side) B = pressures[i][j-1];
+            if (i > 0) T = pressures[i-1][j];
+            if (i < cells_per_side) B = pressures[i+1][j];
+            if (j < cells_per_side) R = pressures[i][j+1];
+            if (j > 0) L = pressures[i][j-1];
+
+            //if (velocitiesY[i][j] > 10) printf("doing velocitiesY = %f - 0.5*(%f)\n", velocitiesY[i][j], T-B);
             velocitiesX[i][j] = velocitiesX[i][j] - 0.5*(R - L);
             velocitiesY[i][j] = velocitiesY[i][j] - 0.5*(T - B);
+            //if (velocitiesY[i][j] != 0.0) printf("velocitiesY is %f\n", velocitiesY[i][j]);
         }
     }
 }
@@ -612,10 +604,10 @@ RefRenderer::render() {
     //advectQuantity(velocitiesY);
     //
 
+
     advectVelocityForward();
     advectVelocityBackward();
     applyDivergence();
-    
     pressureSolve();
     pressureGradient();
     // Draw
@@ -633,8 +625,6 @@ RefRenderer::render() {
             if ((velocitiesX[grid_row][grid_col] != 0.0 || 
                   velocitiesY[grid_row][grid_col] != 0.0) && s >= 0.1) {
            
-                //printf("%f !!!!", s);
-
            // if (pressures[grid_row][grid_col] != 0.0) {
                 //printf("%f,%f    ", velocitiesX[grid_row][grid_col],velocitiesY[grid_row][grid_col]);
                 //printf("%f    ", pressures[grid_row][grid_col]);
@@ -642,6 +632,7 @@ RefRenderer::render() {
                 image->data[i+1] = 0.0;
                 image->data[i+2] = s;//1.0;
                 image->data[i+3] = 1.0;
+                //if (velocitiesY[grid_row][grid_col] < 0.0) image->data[i] = 1;
             } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
                 image->data[i] = 0.8;
                 image->data[i+1] = 0.8;
