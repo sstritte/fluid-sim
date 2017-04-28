@@ -21,10 +21,9 @@ private:
     float** advectionCopyY;
     float** advectionCopy;
     float** divergence;
+    float** vorticity;
 
-    void advectColor();
-    void advectColorForward();
-    void advectColorBackward();
+    int isBoundary(int i, int j);
     void advectQuantity(float** q);
     void advectForward(float** q);
     void advectBackward(float** q);
@@ -34,6 +33,8 @@ private:
     void applyDivergence();
     void pressureSolve();
     void pressureGradient();
+    void applyVorticity();
+    void applyVorticityForce();
 public:
 
     RefRenderer();
