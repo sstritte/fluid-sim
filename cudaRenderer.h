@@ -24,9 +24,7 @@ public:
 
     void setup();
     
-    void setMousePressedLocation(int* mpl);
-
-    void setNewQuantities(double* vxs, double* vys, double* ps);
+    void setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown);
 
     void allocOutputImage(int width, int height);
 

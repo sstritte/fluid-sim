@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <math.h>
+#include <float.h>
+#include <utility>
 #include <stdio.h>
+#include <cstring>
 #include <vector>
 #include <unistd.h>
 #include "refRenderer.h"
@@ -13,6 +16,7 @@
 RefRenderer::RefRenderer() {
     image = NULL;
     mousePressedLocation = NULL;
+    //mousePressedLocations = NULL; gives an error
     velocitiesX = NULL;
     velocitiesY = NULL;
     color = NULL;
@@ -29,6 +33,7 @@ RefRenderer::~RefRenderer() {
 
     if (image) delete image;
     if (mousePressedLocation) delete mousePressedLocation;
+    //if (mousePressedLocations) delete mousePressedLocations; gives error
 
     if (velocitiesX) {
         for (int i = 0; i < cells_per_side + 1; i++) {
@@ -122,42 +127,26 @@ RefRenderer::isBoundary(int i, int j) {
 
 void
 RefRenderer::setup() {
-    printf("SETUP\n");
    cells_per_side = image->width / CELL_DIM;
+
+   mousePressedLocation = new int[image->width * image->height];
+
    velocitiesX = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     velocitiesX[i] = new float[cells_per_side + 1];
-    for (int j = 0; j < cells_per_side + 1; j++) { 
-        if (j < cells_per_side / 2) { 
-            velocitiesX[i][j] = 0.0;
-        } else {
-            velocitiesX[i][j] = 0.0;
-        }
-    }
+    memset(velocitiesX[i], 0, sizeof(float) * (cells_per_side + 1));
    }
 
    velocitiesY = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     velocitiesY[i] = new float[cells_per_side + 1];
-    for (int j = 0; j < cells_per_side + 1; j++) {
-        if (j < cells_per_side / 2) {
-            velocitiesY[i][j] = 0.0;
-        } else {
-            velocitiesY[i][j] = 0.0;
-        }
-    }
+    memset(velocitiesY[i], 0, sizeof(float) * (cells_per_side + 1));
    }
 
    pressures = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     pressures[i] = new float[cells_per_side + 1];
-    for (int j = 0; j < cells_per_side + 1; j++) {
-        if (j < cells_per_side / 2) {
-            pressures[i][j] = 0.0;
-        } else {
-            pressures[i][j] = 0.0;
-        }
-    }
+    memset(pressures[i], 0, sizeof(float) * (cells_per_side + 1));
    }
    advectionCopy = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
@@ -182,122 +171,103 @@ RefRenderer::setup() {
 
    color = new float**[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
-    color[i] = new float*[(cells_per_side + 1)];
-    for (int j = 0; j < cells_per_side + 1; j++) {
-        color[i][j] = new float[4];
-        /*if (i % 2 == 0 && j % 2 == 0) {
-            color[i][j][0] = 0.4666;
-            color[i][j][1] = 0.7882;
-            color[i][j][2] = 0.2666;
-            color[i][j][3] = 1.0;
-        } else if (i % 2 == 0 && j % 2 == 1){
-            color[i][j][0] = 0.1798;
-            color[i][j][1] = 0.457;
-            color[i][j][2] = 0.90630;
-            color[i][j][3] = 1.0;
-        } else if (i % 2 == 1 && j % 2 == 1) {
-            color[i][j][0] = 0.4666;
-            color[i][j][1] = 0.7882;
-            color[i][j][2] = 0.2666;
-            color[i][j][3] = 1.0; 
-        } else {
-            color[i][j][0] = 0.1798;
-            color[i][j][1] = 0.457;
-            color[i][j][2] = 0.90630;
-            color[i][j][3] = 1.0;
-        }*/
-            color[i][j][0] = 0;
-            color[i][j][1] = 0.0392;
-            color[i][j][2] = 0.1098;
-            color[i][j][3] = 1.0;
-            /*if (220 < i && i < 230 && 220 < j && j < 230) {
-                color[i][j][0] = 1.0;
-                color[i][j][1] = 0.4;
-                color[i][j][2] = 0.2;
-                color[i][j][3] = 0.5;
-
-            }*/
-
-
-    }
+       color[i] = new float*[(cells_per_side + 1)];
+       for (int j = 0; j < cells_per_side + 1; j++) {
+           color[i][j] = new float[4];
+           color[i][j][0] = 0;
+           color[i][j][1] = 0.0392;
+           color[i][j][2] = 0.1098;
+           color[i][j][3] = 1.0;
+       }
    }
    colorCopy = new float**[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
-    colorCopy[i] = new float*[(cells_per_side + 1)];
-    for (int j = 0; j < cells_per_side + 1; j++) {
-        colorCopy[i][j] = new float[4];
-        /*if (i % 2 == 0 && j % 2 == 0) {
-            color[i][j][0] = 0.4666;
-            color[i][j][1] = 0.7882;
-            color[i][j][2] = 0.2666;
-            color[i][j][3] = 1.0;
-        } else if (i % 2 == 0 && j % 2 == 1){
-            color[i][j][0] = 0.1798;
-            color[i][j][1] = 0.457;
-            color[i][j][2] = 0.90630;
-            color[i][j][3] = 1.0;
-        } else if (i % 2 == 1 && j % 2 == 1) {
-            color[i][j][0] = 0.4666;
-            color[i][j][1] = 0.7882;
-            color[i][j][2] = 0.2666;
-            color[i][j][3] = 1.0; 
-        } else {
-            color[i][j][0] = 0.1798;
-            color[i][j][1] = 0.457;
-            color[i][j][2] = 0.90630;
-            color[i][j][3] = 1.0;
-        }*/
-
-            /*color[i][j][0] = 0;
-            color[i][j][1] = 0.0392;
-            color[i][j][2] = 0.1098;
-            color[i][j][3] = 1.0;*/
-            /*if (220 < i && i < 230 && 220 < j && j < 230) {
-                color[i][j][0] = 1.0;
-                color[i][j][1] = 0.4;
-                color[i][j][2] = 0.2;
-                color[i][j][3] = 0.5;
-
-            }*/
+       colorCopy[i] = new float*[(cells_per_side + 1)];
+       for (int j = 0; j < cells_per_side + 1; j++) {
+           colorCopy[i][j] = new float[4];
+       }
     }
-   }
-
-
 }
 
-void RefRenderer::setMousePressedLocation(int* mpl) {
-    //mousePressedLocation = mpl;
-    /*for (int i = 0; i < image->height * image-> width; i++) {
-        //mousePressedLocation[i] = mpl[i];
-        if (mpl[i] == 1) {
-            int grid_row = (i / image->width) / (CELL_DIM);
-            int grid_col = (i % image->width) / (CELL_DIM);
-            printf("setting grid %d,%d to be white!!!\n", grid_row, grid_col);
-            color[grid_row][grid_col][0] = 1.0;
-            color[grid_row][grid_col][1] = 1.0;
-            color[grid_row][grid_col][2] = 1.0;
-            color[grid_row][grid_col][3] = 1.0;
-            //velocitiesY[grid_row][grid_col] = 4.0;
-            pressures[grid_row][grid_col] = 4.0;
-        }
-    }*/
+// a is prev mouse point, b is cur mouse point, p is point to consider,
+// fp is fraction projection to be populated as output
+double 
+RefRenderer::distanceToSegment(double ax, double ay, double bx, double by, 
+        double px, double py, double* fp) {
+    double dx = px - ax; //vec2 d = p - a;
+    double dy = py - ay;
+    double xx = bx - ax; //vec2 x = b - a;
+    double xy = by - ay;
+    *fp = 0.0; // fractional projection, 0 - 1 in the length of b-a
+    double lx = sqrt(xx*xx + xy*xy); //length(x)
+    double ld = sqrt(dx*dx + dy*dy); //length(d)
+    if (lx <= 0.0001) return ld;
+    double projection = dx*(xx/lx) + dy*(xy/lx); //dot(d, x/lx)
+    *fp = projection / lx;
+    if (projection < 0.0) return ld;
+    else if (projection > lx) return sqrt((px-bx) * (px-bx) +
+            (py-by) * (py-by)); //length(p - b)
+    return sqrt(abs(dx*dx + dy*dy) - projection * projection);
 }
 
-void RefRenderer::setNewQuantities(double* vxs, double* vys, double* ps) {
+// THIS FUNCTION IS SOOOOO SLOW LOL cause when we draw the pixels (and when
+// the mouse is pressed) we iterate through the whole grid for each cell
+double 
+RefRenderer::distanceToNearestMousePoint(double px, double py, double *fp) {
+    double minLen = DBL_MAX;
+    double fpResult = 0.0;
+    for (std::vector<std::pair<int,int> >::iterator 
+            it = mousePressedLocations.begin() 
+            ; it != mousePressedLocations.end(); ++it) {
+        std::pair<int,int> coords = *it;
+        int grid_row = coords.first;
+        int grid_col = coords.second; 
+        double len = distanceToSegment(grid_col, grid_row, grid_col, grid_row, px, py, fp);
+        if (len < minLen) {
+            minLen = len;
+            fpResult = *fp;
+        }            
+    }
+    *fp = fpResult;
+    return minLen;
+}
+
+void RefRenderer::setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown) {
+    isMouseDown = mouseDown;
+    if (mouseDown) printf("MOUSE DOWN\n");
+    mousePressedLocations.clear();
     for (int i = 0; i < image->height * image-> width; i++) {
-        float p = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
         int grid_row = (i / image->width) / (CELL_DIM);
         int grid_col = (i % image->width) / (CELL_DIM);
-        if (vxs[i] != 0.0 || vys[i] != 0.0) {
-            velocitiesX[grid_row][grid_col] = vxs[i];/// 10.0;
-            velocitiesY[grid_row][grid_col] = vys[i];// / 10.0;
-            //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, 
-            //        grid_col, vxs[i], vys[i]);
+
+        mousePressedLocation[i] = mpl[i]; // unncessary now pretty sure
+        
+        if (mpl[i]) {
+            std::pair<int,int> coords = std::make_pair(grid_row, grid_col);
+            mousePressedLocations.push_back(coords);
         }
-        /*if (ps[i] != 0.0) {
-            pressures[grid_row][grid_col] = p;// / 10.0;
-            ///if (p != 0) printf("setting pressure of (%d,%d) to %f\n", grid_row, grid_col, p);
-        }*/
+        velocitiesX[grid_row][grid_col] *= 0.99;
+        velocitiesY[grid_row][grid_col] *= 0.99;
+        if (isMouseDown) {
+            /*double d = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
+            double projection;
+            double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
+            double taperFactor = 0.6;
+            double projectedFraction = 1.0 - std::min(1.0, std::max(projection, 0.0)) * taperFactor;
+            double R = 50;
+            double m = exp(-l/R); //drag coefficient
+            m *= projectedFraction * projectedFraction;*/
+            double targetVelocityX = vxs[i] * 1 * 1.4; 
+            double targetVelocityY = vys[i] * 1 * 1.4; 
+
+            if (vxs[i] != 0.0 || vys[i] != 0.0) {
+                velocitiesX[grid_row][grid_col] += 
+                    (targetVelocityX - velocitiesX[grid_row][grid_col]);// * m;
+                velocitiesY[grid_row][grid_col] += 
+                    (targetVelocityY - velocitiesY[grid_row][grid_col]);// * m;
+                //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, grid_col, velocitiesX[grid_row][grid_col], velocitiesY[grid_row][grid_col]);
+            }
+        }
 
     }
 
@@ -380,6 +350,70 @@ RefRenderer::advectQuantity(float** quantity) {
     advectBackward(quantity);
 }
 
+void RefRenderer::advectColorBackward() {
+     //Advecting the values in color
+     for (int row = 0; row < cells_per_side; row++) {
+         for (int col = 0; col < cells_per_side; col++) {
+            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
+            int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+            int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+            int prevCellCol = prevPixelCol / CELL_DIM;
+            int prevCellRow = prevPixelRow / CELL_DIM;
+ 
+            if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
+                    && prevCellCol >= 0 && prevCellRow >= 0) {
+                 color[row][col][0] = colorCopy[prevCellRow][prevCellCol][0];
+                 color[row][col][1] = colorCopy[prevCellRow][prevCellCol][1];
+                 color[row][col][2] = colorCopy[prevCellRow][prevCellCol][2];
+                 color[row][col][3] = colorCopy[prevCellRow][prevCellCol][3];
+            } 
+         }
+     }
+ }
+ 
+ void RefRenderer::advectColorForward() {
+     //Advecting the values in color
+     for (int row = 0; row < cells_per_side; row++) {
+         for (int col = 0; col < cells_per_side; col++) {
+            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
+            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
+            int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+            int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+            int nextCellCol = nextPixelCol / CELL_DIM;
+            int nextCellRow = nextPixelRow / CELL_DIM;
+ 
+            int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
+            int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
+            int prevCellCol = prevPixelCol / CELL_DIM;
+            int prevCellRow = prevPixelRow / CELL_DIM;
+ 
+            if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
+                    && nextCellCol >= 0 && nextCellRow >= 0) {
+                 color[nextCellRow][nextCellCol][0] = colorCopy[row][col][0];
+                 color[nextCellRow][nextCellCol][1] = colorCopy[row][col][1];
+                 color[nextCellRow][nextCellCol][2] = colorCopy[row][col][2];
+                 color[nextCellRow][nextCellCol][3] = colorCopy[row][col][3];
+            } 
+         }
+     }
+ }
+ 
+
+void
+RefRenderer::advectColor() {
+    for (int i = 0; i < cells_per_side + 1; i++) {
+        for (int j = 0; j < cells_per_side + 1; j++) {
+            for (int k = 0; k < 4; k++) {
+                colorCopy[i][j][k] = color[i][j][k];
+            }
+        }
+    }
+    advectColorForward();
+    advectColorBackward();
+}
+
+
 void
 RefRenderer::applyPressure() {
     for (int i = 0; i < cells_per_side; i ++) {
@@ -416,8 +450,8 @@ void RefRenderer::advectVelocityForward() {
 
            if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
                    && nextCellCol >= 0 && nextCellRow >= 0) {
-                velocitiesX[nextCellRow][nextCellCol] = 0.99 * advectionCopyX[row][col];
-                velocitiesY[nextCellRow][nextCellCol] = 0.99 * advectionCopyY[row][col];
+                velocitiesX[nextCellRow][nextCellCol] = advectionCopyX[row][col];
+                velocitiesY[nextCellRow][nextCellCol] = advectionCopyY[row][col];
            } 
         }
     }
@@ -437,8 +471,8 @@ RefRenderer::advectVelocityBackward() {
 
            if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
                    && prevCellCol >= 0 && prevCellRow >= 0) {
-                velocitiesX[row][col] = 0.99 * advectionCopyX[prevCellRow][prevCellCol];
-                velocitiesY[row][col] = 0.99 * advectionCopyY[prevCellRow][prevCellCol];
+                velocitiesX[row][col] = advectionCopyX[prevCellRow][prevCellCol];
+                velocitiesY[row][col] = advectionCopyY[prevCellRow][prevCellCol];
            } 
            if (prevCellCol == col && prevCellRow == row) {
                 // you don't move so just disappear
@@ -451,7 +485,7 @@ RefRenderer::advectVelocityBackward() {
 
 // Divergence of velocity: This computes how divergent the velocity field is
 // (how much in/out flow there is at every point).  Used as input to the 
-// Poisson solver, below.
+// pressure solve below.
 void
 RefRenderer::applyDivergence() {
     float L = 0.0;
@@ -490,6 +524,7 @@ RefRenderer::pressureSolve() {
             if (j < cells_per_side) R = pressures[i][j+1];
             if (j > 0) L = pressures[i][j-1];
             tempPressure[i][j] = (L + R + B + T + -1 * divergence[i][j]) * .25;
+                //if (L+R+B+T > 0.0) printf("L+R+B+T is %f, -1*divergence is %f\n", L+R+B+T, -1*divergence[i][j]);
         }
     }
     for (int i = 0; i < cells_per_side + 1; i++) {
@@ -573,15 +608,10 @@ RefRenderer::applyVorticityForce() {
 
 void
 RefRenderer::render() {
-    //usleep(TIME_STEP*1000000);
-    
-    
     advectVelocityForward();
     advectVelocityBackward();
-
-
     // set boundary conditions
-    for (int i = 0; i < cells_per_side + 1; i++) {
+    /*for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             int side = isBoundary(i,j);
             if (side) {
@@ -601,62 +631,88 @@ RefRenderer::render() {
                 }
             }
         }
-    }
+    }*/
     applyVorticity();
     applyVorticityForce();
     applyDivergence();
     pressureSolve();
     pressureGradient();
 
-
     // Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
             int grid_col = ((i/4) % image->width) / (CELL_DIM);
-            float vx = velocitiesX[grid_row][grid_col];
-            float vy = velocitiesY[grid_row][grid_col];
-            float v = sqrt(vx * vx + vy * vy);
-            float s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
-            if ((velocitiesX[grid_row][grid_col] != 0.0 || 
-                  velocitiesY[grid_row][grid_col] != 0.0) && s >= 0.1) {
-           
-           // if (pressures[grid_row][grid_col] != 0.0) {
-                //printf("%f,%f    ", velocitiesX[grid_row][grid_col],velocitiesY[grid_row][grid_col]);
-                //printf("%f    ", pressures[grid_row][grid_col]);
-                image->data[i] = 0.0;//s;//1.0-s;
-                image->data[i+1] = 0.0;
-                image->data[i+2] = s;//1.0;
-                image->data[i+3] = 1.0;
-                if (velocitiesY[grid_row][grid_col] < 0.0) image->data[i] = 1;
-            } /*else if (velocitiesY[grid_row][grid_col] > 0.0) {
-                image->data[i] = 0.8;
-                image->data[i+1] = 0.8;
-                image->data[i+2] = 1.0;
-                image->data[i+3] = 1.0;
+            double vx = velocitiesX[grid_row][grid_col];
+            double vy = velocitiesY[grid_row][grid_col];
+            double v = sqrt(vx * vx + vy * vy);
+            double s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
 
-            }*/ else {
+
+            if (abs(v) < 0.00001) {
+                color[grid_row][grid_col][0] = 0.0;
+                color[grid_row][grid_col][1] = 0.0;//0.0392;
+                color[grid_row][grid_col][2] = 0.0;//0.1098;
+                color[grid_row][grid_col][3] = 1.0;
+                image->data[i] = color[grid_row][grid_col][0];
+                image->data[i+1] = color[grid_row][grid_col][1];
+                image->data[i+2] = color[grid_row][grid_col][2];
+                image->data[i+3] = color[grid_row][grid_col][3];
+                continue;
+            } 
+            color[grid_row][grid_col][0] *= 0.9494; 
+            color[grid_row][grid_col][1] *= 0.9494; 
+            color[grid_row][grid_col][2] *= 0.9696; 
+        
+            if (isMouseDown){
+                double d = sqrt(vx * vx + vy * vy);
+                double projection;
+                double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
+                float taperFactor = 0.6;
+                double projectedFraction = 1.0 - std::min(1.0, 
+                        std::max(projection, 0.0)) * taperFactor;
+                double R = 50; //0.025; // the bigger, the more stuff gets colored? not really, m is 
+                                        // already maxed out to 1
+                double m = exp(-l/R); //drag coefficient
+                double speed = v;
+
+                //printf("l is %f, m is %f, projection is %f\n", l, m, projection);
+
+                double x = std::min(1.0, std::max(fabs((speed * speed * 0.02 - 
+                            projection * 5.0) * projectedFraction), 0.0));
+
+                double r = (2.4 / 60.0) * x + (0.2 /30.0) * (1-x) + (1.0 * pow(x, 5.0));
+                double g = (0.0 / 60.0) * x + (51.8 / 30.0) * (1-x) + (1.0 * pow(x, 5.0));
+                double b = (5.9 / 60.0) * x + (100.0 / 30.0) * (1-x) + (1.0 * pow(x, 5.0));
+
+                color[grid_row][grid_col][0] += m * r;
+                color[grid_row][grid_col][1] += m * g;
+                color[grid_row][grid_col][2] += m * b;
+                color[grid_row][grid_col][3] = 1.0;
+            }
+
+            image->data[i] = color[grid_row][grid_col][0];
+            image->data[i+1] = color[grid_row][grid_col][1];
+            image->data[i+2] = color[grid_row][grid_col][2];
+            image->data[i+3] = color[grid_row][grid_col][3];
+
+            //if (image->data[i] < 1.0) printf("RGB: %f %f %f\n", image->data[i], image->data[i+1], image->data[i+2]);
+            //printf("m rgb: %f %f %f %f\n", m, r,g,b);
+
+            /*if ((vx != 0.0 || vy != 0.0) && s >= 0.1) {
+                image->data[i] = 0.0;
+                image->data[i+1] = 0.0;
+                image->data[i+2] = s;
+                image->data[i+3] = 1.0;
+                //if (velocitiesY[grid_row][grid_col] < 0.0) image->data[i] = 1;
+            } else {
                 image->data[i] = 0.0;
                 image->data[i+1] = 0.0392;
                 image->data[i+2] = 0.1098;
                 image->data[i+3] = 1.0;
 
-            }
+            }*/
     }
+    advectColor();
 
-  
-    // Make mouse clicked locations turn white
-    /* for (int i = 0; i < 4*image->width*image->height; i+=4) {
-        if (mousePressedLocation[i / 4]) {
-            image->data[i] = 1.0;
-            image->data[i+1] = 1.0;
-            image->data[i+2] = 1.0;
-            image->data[i+3] = 1.0;
-        } else {
-            image->data[i] = 0.1798;
-            image->data[i+1] = 0.457;
-            image->data[i+2] = 0.9063;
-            image->data[i+3] = 0.5;
-        }
-    }*/
 }
 

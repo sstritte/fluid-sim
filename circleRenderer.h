@@ -13,9 +13,7 @@ public:
 
     virtual void setup() = 0;
     
-    virtual void setMousePressedLocation(int* mpl) = 0;
-
-    virtual void setNewQuantities(double* vxs, double* vys, double* ps) = 0;
+    virtual void setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown) = 0;
 
     virtual void allocOutputImage(int width, int height) = 0;
 

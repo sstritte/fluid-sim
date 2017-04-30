@@ -19,6 +19,7 @@ static struct {
     int prevMouseX;
     int prevMouseY;
     double prevMousePressTime;
+    bool isMouseDown;
     double* newVelocitiesX;
     double* newVelocitiesY;
     double* newPressures;
@@ -49,7 +50,7 @@ handleDisplay() {
     // rendered image on the screen.
 
     const Image* img = gDisplay.renderer->getImage();
-    //int* mousePressedLocation = gDisplay.mousePressedLocation;
+    int* mousePressedLocation = gDisplay.mousePressedLocation;
 
     int width = std::min(img->width, gDisplay.width);
     int height = std::min(img->height, gDisplay.height);
@@ -104,13 +105,14 @@ handleKeyPress(unsigned char key, int x, int y) {
 
 void handleMouseClick(int button, int state, int x, int y) {
     if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        //printf("MOUSE DOWN\n");
+        gDisplay.isMouseDown = true;
         gDisplay.prevMousePressTime = CycleTimer::currentSeconds();
         gDisplay.prevMouseX = x;
         gDisplay.prevMouseY = y;
+        int index = (gDisplay.height - y - 1) * gDisplay.width + x;
+        gDisplay.mousePressedLocation[index] = 1;
     } else if(button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-        //printf("MOUSE UP\n");
-        //gDisplay.prevMousePressTime = -1; 
+        gDisplay.isMouseDown = false;
     } 
 
 }
@@ -122,14 +124,15 @@ void
 handleMouseMove(int x, int y) {
     //printf("%d, %d\n", x,y);
     double mousePressTime = CycleTimer::currentSeconds();
-    double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2)); 
-    double distX = x - gDisplay.prevMouseX;
-    double distY = y - gDisplay.prevMouseY;
-    double d = sqrt(distX * distX + distY * distY);
-    double CLAMP_MAX_DIST = 50.0;
-
+    double dt = mousePressTime - gDisplay.prevMousePressTime;
+    double pixelDist = sqrt(pow(x - gDisplay.prevMouseX, 2) + pow(y - gDisplay.prevMouseY, 2));     
     int prevMouseX = gDisplay.prevMouseX;
     int prevMouseY = gDisplay.prevMouseY;
+    double distX = x - prevMouseX;
+    double distY = y - prevMouseY;
+    double d = sqrt(distX * distX + distY * distY);
+    double velocityX = distX; 
+    double velocityY = distY;
 
     int prevIndex = 
         (gDisplay.height - prevMouseY - 1) * gDisplay.width + prevMouseX;
@@ -142,15 +145,17 @@ handleMouseMove(int x, int y) {
         for (int px = prevMouseX; px < x; px++) {
             int py = prevMouseY + (px - prevMouseX) * slope;
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = distX; 
-            gDisplay.newVelocitiesY[index] = -distY; 
+            gDisplay.mousePressedLocation[prevIndex] = 1;
+            gDisplay.newVelocitiesX[index] = velocityX; 
+            gDisplay.newVelocitiesY[index] = -velocityY;
         }
     } else {
         for (int px = prevMouseX; px > x; px--) {
             int py = prevMouseY + (px - prevMouseX) * slope;
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = distX;
-            gDisplay.newVelocitiesY[index] = -distY; 
+            gDisplay.mousePressedLocation[prevIndex] = 1;
+            gDisplay.newVelocitiesX[index] = velocityX;
+            gDisplay.newVelocitiesY[index] = -velocityY;
         }
     }
     // fill in the lines in the y direction
@@ -159,23 +164,25 @@ handleMouseMove(int x, int y) {
         for (int py = prevMouseY; py < y; py++) {
             int px = prevMouseX + (py - prevMouseY) * (1/slope);
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = distX; 
-            gDisplay.newVelocitiesY[index] = -distY; 
+            gDisplay.mousePressedLocation[prevIndex] = 1;
+            gDisplay.newVelocitiesX[index] = velocityX; 
+            gDisplay.newVelocitiesY[index] = -velocityY; 
         }
     } else {
         for (int py = prevMouseY; py > y; py--) {
             int px = prevMouseX + (py - prevMouseY) * (1/slope);
             int index = (gDisplay.height - py - 1) * gDisplay.width + px;
-            gDisplay.newVelocitiesX[index] = distX;
-            gDisplay.newVelocitiesY[index] = -distY; 
+            gDisplay.mousePressedLocation[prevIndex] = 1;
+            gDisplay.newVelocitiesX[index] = velocityX;
+            gDisplay.newVelocitiesY[index] = -velocityY; 
         }
     }
 
 
     if (0 <= prevIndex && prevIndex < gDisplay.height * gDisplay.width) {
         gDisplay.mousePressedLocation[prevIndex] = 1;
-        gDisplay.newVelocitiesX[prevIndex] = distX; 
-        gDisplay.newVelocitiesY[prevIndex] = -distY;
+        gDisplay.newVelocitiesX[prevIndex] = velocityX; 
+        gDisplay.newVelocitiesY[prevIndex] = -velocityY;
         gDisplay.newPressures[prevIndex] = 1.0;
     }
 
@@ -199,11 +206,11 @@ renderPicture() {
     double endClearTime = CycleTimer::currentSeconds();
 
     // SEND RELEVANT INFO BEFORE RENDERING
-    //gDisplay.renderer->setMousePressedLocation(gDisplay.mousePressedLocation);
-    memset(gDisplay.mousePressedLocation, 0, sizeof(int) * gDisplay.width * gDisplay.height);
-
-    gDisplay.renderer->setNewQuantities(gDisplay.newVelocitiesX, gDisplay.newVelocitiesY, gDisplay.newPressures);
+    gDisplay.renderer->setNewQuantities(gDisplay.newVelocitiesX, 
+            gDisplay.newVelocitiesY, gDisplay.mousePressedLocation, 
+            gDisplay.isMouseDown);
     memset(gDisplay.newVelocitiesX, 0, sizeof(double) * gDisplay.width * gDisplay.height);
+    memset(gDisplay.mousePressedLocation, 0, sizeof(int) * gDisplay.width * gDisplay.height);
     memset(gDisplay.newVelocitiesY, 0, sizeof(double) * gDisplay.width * gDisplay.height);
 
     // RENDER THE PARTICLES INTO THE IMAGE
