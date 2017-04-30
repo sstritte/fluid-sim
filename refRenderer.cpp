@@ -210,8 +210,6 @@ RefRenderer::distanceToSegment(double ax, double ay, double bx, double by,
     return sqrt(abs(dx*dx + dy*dy) - projection * projection);
 }
 
-// THIS FUNCTION IS SOOOOO SLOW LOL cause when we draw the pixels (and when
-// the mouse is pressed) we iterate through the whole grid for each cell
 double 
 RefRenderer::distanceToNearestMousePoint(double px, double py, double *fp) {
     double minLen = DBL_MAX;
@@ -246,25 +244,25 @@ void RefRenderer::setNewQuantities(double* vxs, double* vys, int* mpl, bool mous
             std::pair<int,int> coords = std::make_pair(grid_row, grid_col);
             mousePressedLocations.push_back(coords);
         }
-        velocitiesX[grid_row][grid_col] *= 0.99;
-        velocitiesY[grid_row][grid_col] *= 0.99;
+        velocitiesX[grid_row][grid_col] *= 0.999;
+        velocitiesY[grid_row][grid_col] *= 0.999;
         if (isMouseDown) {
-            /*double d = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
+            double d = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
             double projection;
             double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
             double taperFactor = 0.6;
             double projectedFraction = 1.0 - std::min(1.0, std::max(projection, 0.0)) * taperFactor;
-            double R = 50;
+            double R = 10;
             double m = exp(-l/R); //drag coefficient
-            m *= projectedFraction * projectedFraction;*/
+            m *= projectedFraction * projectedFraction;
             double targetVelocityX = vxs[i] * 1 * 1.4; 
             double targetVelocityY = vys[i] * 1 * 1.4; 
 
             if (vxs[i] != 0.0 || vys[i] != 0.0) {
                 velocitiesX[grid_row][grid_col] += 
-                    (targetVelocityX - velocitiesX[grid_row][grid_col]);// * m;
+                    (targetVelocityX - velocitiesX[grid_row][grid_col]) * m;
                 velocitiesY[grid_row][grid_col] += 
-                    (targetVelocityY - velocitiesY[grid_row][grid_col]);// * m;
+                    (targetVelocityY - velocitiesY[grid_row][grid_col]) * m;
                 //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, grid_col, velocitiesX[grid_row][grid_col], velocitiesY[grid_row][grid_col]);
             }
         }
@@ -649,15 +647,16 @@ RefRenderer::render() {
 
 
             if (abs(v) < 0.00001) {
-                color[grid_row][grid_col][0] = 0.0;
-                color[grid_row][grid_col][1] = 0.0;//0.0392;
-                color[grid_row][grid_col][2] = 0.0;//0.1098;
+                // make the color go away faster
+                color[grid_row][grid_col][0] *= 0.9;
+                color[grid_row][grid_col][1] *= 0.9;
+                color[grid_row][grid_col][2] *= 0.9;
                 color[grid_row][grid_col][3] = 1.0;
-                image->data[i] = color[grid_row][grid_col][0];
+                /*image->data[i] = color[grid_row][grid_col][0];
                 image->data[i+1] = color[grid_row][grid_col][1];
                 image->data[i+2] = color[grid_row][grid_col][2];
                 image->data[i+3] = color[grid_row][grid_col][3];
-                continue;
+                continue;*/
             } 
             color[grid_row][grid_col][0] *= 0.9494; 
             color[grid_row][grid_col][1] *= 0.9494; 
@@ -667,11 +666,11 @@ RefRenderer::render() {
                 double d = sqrt(vx * vx + vy * vy);
                 double projection;
                 double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
+                if (l < 1.0) printf("l is %f\n", l);
                 float taperFactor = 0.6;
                 double projectedFraction = 1.0 - std::min(1.0, 
                         std::max(projection, 0.0)) * taperFactor;
-                double R = 50; //0.025; // the bigger, the more stuff gets colored? not really, m is 
-                                        // already maxed out to 1
+                double R = 10; //0.025; // the bigger, the more stuff gets colored
                 double m = exp(-l/R); //drag coefficient
                 double speed = v;
 
@@ -680,9 +679,9 @@ RefRenderer::render() {
                 double x = std::min(1.0, std::max(fabs((speed * speed * 0.02 - 
                             projection * 5.0) * projectedFraction), 0.0));
 
-                double r = (2.4 / 60.0) * x + (0.2 /30.0) * (1-x) + (1.0 * pow(x, 5.0));
-                double g = (0.0 / 60.0) * x + (51.8 / 30.0) * (1-x) + (1.0 * pow(x, 5.0));
-                double b = (5.9 / 60.0) * x + (100.0 / 30.0) * (1-x) + (1.0 * pow(x, 5.0));
+                double r = (2.4 / 60.0) * x + (0.2 /30.0) * (1-x) + (1.0 * pow(x, 9.0));
+                double g = (0.0 / 60.0) * x + (51.8 / 30.0) * (1-x) + (1.0 * pow(x, 9.0));
+                double b = (5.9 / 60.0) * x + (100.0 / 30.0) * (1-x) + (1.0 * pow(x, 9.0));
 
                 color[grid_row][grid_col][0] += m * r;
                 color[grid_row][grid_col][1] += m * g;
