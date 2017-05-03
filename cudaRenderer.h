@@ -24,7 +24,7 @@ public:
 
     void setup();
     
-    void setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown);
+    void setNewQuantities(std::vector<std::pair<int, int> > mpls);
 
     void allocOutputImage(int width, int height);
 

@@ -15,7 +15,6 @@
 
 RefRenderer::RefRenderer() {
     image = NULL;
-    mousePressedLocation = NULL;
     //mousePressedLocations = NULL; gives an error
     velocitiesX = NULL;
     velocitiesY = NULL;
@@ -32,7 +31,6 @@ RefRenderer::RefRenderer() {
 RefRenderer::~RefRenderer() {
 
     if (image) delete image;
-    if (mousePressedLocation) delete mousePressedLocation;
     //if (mousePressedLocations) delete mousePressedLocations; gives error
 
     if (velocitiesX) {
@@ -129,8 +127,6 @@ void
 RefRenderer::setup() {
    cells_per_side = image->width / CELL_DIM;
 
-   mousePressedLocation = new int[image->width * image->height];
-
    velocitiesX = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
     velocitiesX[i] = new float[cells_per_side + 1];
@@ -211,60 +207,75 @@ RefRenderer::distanceToSegment(double ax, double ay, double bx, double by,
 }
 
 double 
-RefRenderer::distanceToNearestMousePoint(double px, double py, double *fp) {
+RefRenderer::distanceToNearestMouseSegment(double px, double py, double *fp,
+        std::pair<double,double> *mouseSegmentVelocity) {
     double minLen = DBL_MAX;
     double fpResult = 0.0;
+    double vx = 0.0;
+    double vy = 0.0;
     for (std::vector<std::pair<int,int> >::iterator 
             it = mousePressedLocations.begin() 
-            ; it != mousePressedLocations.end(); ++it) {
-        std::pair<int,int> coords = *it;
-        int grid_row = coords.first;
-        int grid_col = coords.second; 
-        double len = distanceToSegment(grid_col, grid_row, grid_col, grid_row, px, py, fp);
+            ; it + 1 != mousePressedLocations.end(); ++it) {
+        std::pair<int,int> coords1 = *it;
+        int grid_col1 = coords1.first;
+        int grid_row1 = coords1.second;
+        std::pair<int,int> coords2 = *(it + 1);
+        int grid_col2 = coords2.first;
+        int grid_row2 = coords2.second; 
+        double len = distanceToSegment(grid_col1, grid_row1, grid_col2, grid_row2, px, py, fp);
         if (len < minLen) {
             minLen = len;
             fpResult = *fp;
-        }            
+            vx = grid_col2 - grid_col1;
+            vy = grid_row2 - grid_row1;
+        }         
     }
     *fp = fpResult;
+    std::pair<double,double> msvResult = std::make_pair(vx,vy);
+    *mouseSegmentVelocity = msvResult;
     return minLen;
 }
 
-void RefRenderer::setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown) {
-    isMouseDown = mouseDown;
-    if (mouseDown) printf("MOUSE DOWN\n");
+void RefRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
     mousePressedLocations.clear();
+
+    for (std::vector<std::pair<int,int> >::iterator it = mpls.begin() 
+            ; it != mpls.end(); ++it) {
+        std::pair<int,int> c = *it;
+        mousePressedLocations.push_back(std::make_pair(c.first, c.second));
+        //printf("putting in %d,%d\n", c.first, c.second);
+    }
+    
     for (int i = 0; i < image->height * image-> width; i++) {
         int grid_row = (i / image->width) / (CELL_DIM);
         int grid_col = (i % image->width) / (CELL_DIM);
 
-        mousePressedLocation[i] = mpl[i]; // unncessary now pretty sure
-        
-        if (mpl[i]) {
-            std::pair<int,int> coords = std::make_pair(grid_row, grid_col);
-            mousePressedLocations.push_back(coords);
-        }
         velocitiesX[grid_row][grid_col] *= 0.999;
         velocitiesY[grid_row][grid_col] *= 0.999;
-        if (isMouseDown) {
-            double d = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
+        if (mpls.size() > 0) { //isMouseDown) {
+            //double d = sqrt(vxs[i] * vxs[i] + vys[i] * vys[i]);
             double projection;
-            double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
+            std::pair<double,double> mouseSegmentVelocity;
+            double l = distanceToNearestMouseSegment(grid_col, grid_row, 
+                    &projection, &mouseSegmentVelocity);
+            //printf("velocity %f,%f\n", mouseSegmentVelocity.first, mouseSegmentVelocity.second);
+            double vx = mouseSegmentVelocity.first;
+            double vy = mouseSegmentVelocity.second;
             double taperFactor = 0.6;
             double projectedFraction = 1.0 - std::min(1.0, std::max(projection, 0.0)) * taperFactor;
             double R = 10;
             double m = exp(-l/R); //drag coefficient
             m *= projectedFraction * projectedFraction;
-            double targetVelocityX = vxs[i] * 1 * 1.4; 
-            double targetVelocityY = vys[i] * 1 * 1.4; 
+            double targetVelocityX = vx * 1 * 1.4; 
+            double targetVelocityY = vy * 1 * 1.4; 
 
-            if (vxs[i] != 0.0 || vys[i] != 0.0) {
+            //if (vxs[i] != 0.0 || vys[i] != 0.0) {
                 velocitiesX[grid_row][grid_col] += 
                     (targetVelocityX - velocitiesX[grid_row][grid_col]) * m;
                 velocitiesY[grid_row][grid_col] += 
                     (targetVelocityY - velocitiesY[grid_row][grid_col]) * m;
                 //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, grid_col, velocitiesX[grid_row][grid_col], velocitiesY[grid_row][grid_col]);
-            }
+            //}
         }
 
     }
@@ -380,11 +391,6 @@ void RefRenderer::advectColorBackward() {
             int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * CELL_DIM);
             int nextCellCol = nextPixelCol / CELL_DIM;
             int nextCellRow = nextPixelRow / CELL_DIM;
- 
-            int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * CELL_DIM);
-            int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * CELL_DIM);
-            int prevCellCol = prevPixelCol / CELL_DIM;
-            int prevCellRow = prevPixelRow / CELL_DIM;
  
             if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
                     && nextCellCol >= 0 && nextCellRow >= 0) {
@@ -608,28 +614,6 @@ void
 RefRenderer::render() {
     advectVelocityForward();
     advectVelocityBackward();
-    // set boundary conditions
-    /*for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            int side = isBoundary(i,j);
-            if (side) {
-                divergence[i][j] = 0.0;
-                pressures[i][j] = 0.0;
-                if (side == 1) {// left
-                    velocitiesX[i][j] = -1*velocitiesX[i][j+1];
-                }
-                if (side == 2) { //top
-                    velocitiesY[i][j] = -1*velocitiesY[i+1][j];
-                }
-                if (side == 3) { //right
-                    velocitiesX[i][j] = -1*velocitiesX[i][j-1];
-                }
-                if (side == 4) { //bottom
-                    velocitiesY[i][j] = -1*velocitiesY[i-1][j];
-                }
-            }
-        }
-    }*/
     applyVorticity();
     applyVorticityForce();
     applyDivergence();
@@ -643,8 +627,6 @@ RefRenderer::render() {
             double vx = velocitiesX[grid_row][grid_col];
             double vy = velocitiesY[grid_row][grid_col];
             double v = sqrt(vx * vx + vy * vy);
-            double s = 2 * (1.0 / (1.0 + exp(-1.0 * v))) - 1;
-
 
             if (abs(v) < 0.00001) {
                 // make the color go away faster
@@ -652,27 +634,28 @@ RefRenderer::render() {
                 color[grid_row][grid_col][1] *= 0.9;
                 color[grid_row][grid_col][2] *= 0.9;
                 color[grid_row][grid_col][3] = 1.0;
-                /*image->data[i] = color[grid_row][grid_col][0];
-                image->data[i+1] = color[grid_row][grid_col][1];
-                image->data[i+2] = color[grid_row][grid_col][2];
-                image->data[i+3] = color[grid_row][grid_col][3];
-                continue;*/
             } 
             color[grid_row][grid_col][0] *= 0.9494; 
             color[grid_row][grid_col][1] *= 0.9494; 
             color[grid_row][grid_col][2] *= 0.9696; 
         
-            if (isMouseDown){
-                double d = sqrt(vx * vx + vy * vy);
+            if (mousePressedLocations.size() > 0) {//isMouseDown){
+                //double d = sqrt(vx * vx + vy * vy);
                 double projection;
-                double l = distanceToNearestMousePoint(grid_col, grid_row, &projection);
-                if (l < 1.0) printf("l is %f\n", l);
+                std::pair<double,double> mouseSegmentVelocity;
+                double l = distanceToNearestMouseSegment(grid_col, grid_row, 
+                        &projection, &mouseSegmentVelocity);
+
+                //if (l < 1.0) printf("l is %f\n", l);
                 float taperFactor = 0.6;
                 double projectedFraction = 1.0 - std::min(1.0, 
                         std::max(projection, 0.0)) * taperFactor;
                 double R = 10; //0.025; // the bigger, the more stuff gets colored
                 double m = exp(-l/R); //drag coefficient
-                double speed = v;
+                //double speed = d;
+                double dx = mouseSegmentVelocity.first;
+                double dy = mouseSegmentVelocity.second;
+                double speed = sqrt(dx * dx + dy * dy);
 
                 //printf("l is %f, m is %f, projection is %f\n", l, m, projection);
 
@@ -693,25 +676,7 @@ RefRenderer::render() {
             image->data[i+1] = color[grid_row][grid_col][1];
             image->data[i+2] = color[grid_row][grid_col][2];
             image->data[i+3] = color[grid_row][grid_col][3];
-
-            //if (image->data[i] < 1.0) printf("RGB: %f %f %f\n", image->data[i], image->data[i+1], image->data[i+2]);
-            //printf("m rgb: %f %f %f %f\n", m, r,g,b);
-
-            /*if ((vx != 0.0 || vy != 0.0) && s >= 0.1) {
-                image->data[i] = 0.0;
-                image->data[i+1] = 0.0;
-                image->data[i+2] = s;
-                image->data[i+3] = 1.0;
-                //if (velocitiesY[grid_row][grid_col] < 0.0) image->data[i] = 1;
-            } else {
-                image->data[i] = 0.0;
-                image->data[i+1] = 0.0392;
-                image->data[i+2] = 0.1098;
-                image->data[i+3] = 1.0;
-
-            }*/
     }
     advectColor();
-
 }
 

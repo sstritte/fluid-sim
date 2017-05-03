@@ -4,6 +4,7 @@
 #include "circleRenderer.h"
 #include <list>
 #include <utility> // std::pair
+#include <vector>
 
 class RefRenderer : public CircleRenderer {
 
@@ -29,7 +30,8 @@ private:
 
     double distanceToSegment(double ax, double ay, double bx, double by, 
         double px, double py, double* fp);
-    double distanceToNearestMousePoint(double px, double py, double *fp);
+    double distanceToNearestMouseSegment(double px, double py, double *fp, 
+            std::pair<double,double>* mouseSegmentVelocity);
     int isBoundary(int i, int j);
     void advectColor();
     void advectColorForward();
@@ -54,7 +56,7 @@ public:
 
     void setup();
     
-    void setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown);
+    void setNewQuantities(std::vector<std::pair<int, int> > mpls);
 
     void allocOutputImage(int width, int height);
 

@@ -1,6 +1,9 @@
 #ifndef __CIRCLE_RENDERER_H__
 #define __CIRCLE_RENDERER_H__
 
+#include <vector>
+#include <utility>
+
 struct Image;
 
 class CircleRenderer {
@@ -13,7 +16,7 @@ public:
 
     virtual void setup() = 0;
     
-    virtual void setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown) = 0;
+    virtual void setNewQuantities(std::vector<std::pair<int, int> > mpls) = 0;
 
     virtual void allocOutputImage(int width, int height) = 0;
 

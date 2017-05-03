@@ -42,7 +42,7 @@ CudaRenderer::setup() {
 }
 
 void 
-CudaRenderer::setNewQuantities(double* vxs, double* vys, int* mpl, bool mouseDown) {
+CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
     // nothing yet
 }
 // allocOutputImage --
