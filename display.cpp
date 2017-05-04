@@ -98,13 +98,15 @@ handleKeyPress(unsigned char key, int x, int y) {
     }
 }
 
-/*void handleMouseClick(int button, int state, int x, int y) {
+void handleMouseClick(int button, int state, int x, int y) {
     if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        gDisplay.isMouseDown = true;
+        //gDisplay.isMouseDown = true;
+        std::pair<int, int> coords = std::make_pair(x,gDisplay.height - y);
+        gDisplay.mousePressedLocations.push_back(coords);
     } else if(button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-        gDisplay.isMouseDown = false;
+        //gDisplay.isMouseDown = false;
     } 
-}*/
+}
 
 // handleMouseMove --
 // 
@@ -165,7 +167,7 @@ startRendererWithDisplay(CircleRenderer* renderer) {
     glutCreateWindow("CMU 15-418 Final Project - Fluid Simulator");
     glutDisplayFunc(handleDisplay);
     glutKeyboardFunc(handleKeyPress);
-    //glutMouseFunc(handleMouseClick);
+    glutMouseFunc(handleMouseClick);
     glutMotionFunc(handleMouseMove);
     glutMainLoop();
 }

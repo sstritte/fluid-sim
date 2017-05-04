@@ -203,7 +203,7 @@ RefRenderer::distanceToSegment(double ax, double ay, double bx, double by,
     if (projection < 0.0) return ld;
     else if (projection > lx) return sqrt((px-bx) * (px-bx) +
             (py-by) * (py-by)); //length(p - b)
-    return sqrt(abs(dx*dx + dy*dy) - projection * projection);
+    return sqrt(abs(dx*dx + dy*dy - projection * projection));
 }
 
 double 
@@ -639,7 +639,7 @@ RefRenderer::render() {
             color[grid_row][grid_col][1] *= 0.9494; 
             color[grid_row][grid_col][2] *= 0.9696; 
         
-            if (mousePressedLocations.size() > 0) {//isMouseDown){
+            if (mousePressedLocations.size() > 0) {
                 //double d = sqrt(vx * vx + vy * vy);
                 double projection;
                 std::pair<double,double> mouseSegmentVelocity;
@@ -650,12 +650,12 @@ RefRenderer::render() {
                 float taperFactor = 0.6;
                 double projectedFraction = 1.0 - std::min(1.0, 
                         std::max(projection, 0.0)) * taperFactor;
-                double R = 10; //0.025; // the bigger, the more stuff gets colored
+                double R = 12; //0.025; // the bigger, the more stuff gets colored
                 double m = exp(-l/R); //drag coefficient
                 //double speed = d;
-                double dx = mouseSegmentVelocity.first;
-                double dy = mouseSegmentVelocity.second;
-                double speed = sqrt(dx * dx + dy * dy);
+                double vx = velocitiesX[grid_row][grid_col];
+                double vy = velocitiesY[grid_row][grid_col];
+                double speed = sqrt(vx * vx + vy * vy);
 
                 //printf("l is %f, m is %f, projection is %f\n", l, m, projection);
 
