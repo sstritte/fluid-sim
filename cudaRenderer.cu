@@ -25,7 +25,7 @@ struct GlobalConstants {
     int height;
 
     float* VX;
-    float * VY;
+    float* VY;
     float* pressures;
     float* VXCopy;
     float* VYCopy;
@@ -34,6 +34,8 @@ struct GlobalConstants {
     float* color;
     float* colorCopy;
     float* imageData;
+
+    int* mpls;
 };
 
 __constant__ GlobalConstants cuParams;
@@ -56,6 +58,95 @@ __global__ void kernelClearImage(float r, float g, float b, float a) {
 
 }
 
+__device__ __inline__ double 
+distanceToSegment(double ax, double ay, double bx, double by, 
+        double px, double py, double* fp) {
+    double dx = px - ax; //vec2 d = p - a;
+    double dy = py - ay;
+    double xx = bx - ax; //vec2 x = b - a;
+    double xy = by - ay;
+    *fp = 0.0; // fractional projection, 0 - 1 in the length of b-a
+    double lx = sqrt(xx*xx + xy*xy); //length(x)
+    double ld = sqrt(dx*dx + dy*dy); //length(d)
+    if (lx <= 0.0001) return ld;
+    double projection = dx*(xx/lx) + dy*(xy/lx); //dot(d, x/lx)
+    *fp = projection / lx;
+    if (projection < 0.0) return ld;
+    else if (projection > lx) return sqrt((px-bx) * (px-bx) +
+            (py-by) * (py-by)); //length(p - b)
+    return sqrt(abs(dx*dx + dy*dy - projection * projection));
+}
+
+__device__ __inline__ double 
+distanceToNearestMouseSegment(double px, double py, double *fp,
+        double* vx, double *vy) {
+    double minLen = DBL_MAX;
+    double fpResult = 0.0;
+    double vxResult = 0.0;
+    double vyResult = 0.0;
+    for (int i = 0; i < 400 - 2; i += 2) {
+
+        int grid_col1 = cuParams.mpls[i];
+        int grid_row1 = cuParams.mpls[i + 1];
+        int grid_col2 = cuParams.mpls[i + 2];
+        int grid_row2 = cuParams.mpls[i + 3];
+        if (grid_col2 == 0 & grid_row2 == 0) break;
+        double len = distanceToSegment(grid_col1, grid_row1, grid_col2, grid_row2, px, py, fp);
+        if (len < minLen) {
+            minLen = len;
+            fpResult = *fp;
+            vxResult = grid_col2 - grid_col1;
+            vyResult = grid_row2 - grid_row1;
+        }        
+
+    }
+    *fp = fpResult;
+    *vx = vxResult;
+    *vy = vyResult;
+    return minLen;
+}
+
+//kernelSetNewVelocities
+__global__ void kernelSetNewVelocities() {
+    int grid_col = blockIdx.x * blockDim.x + threadIdx.x;
+    int grid_row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+    int height = cuParams.height;
+
+    if (grid_col >= width || grid_row >= height) return;
+    if (grid_row * width + grid_col >= width * height) return; 
+    
+    int imageX = grid_col;
+    int imageY = grid_row;
+    //if (blockIdx.x != 3) return;
+    int offset = 4 * (imageY * width + imageX);
+    float4 value = make_float4(1.f,0.f,1.f,1.f);
+
+    // Write to global memory.
+    *(float4*)(&cuParams.imageData[offset]) = value;
+   
+    cuParams.VX[grid_row * width + grid_col] *= 0.999;
+    cuParams.VY[grid_row * width + grid_col] *= 0.999;
+    double projection;
+    double vx;
+    double vy;
+    double l = distanceToNearestMouseSegment(grid_col, grid_row, 
+            &projection, &vx, &vy);
+    //printf("velocity %f,%f\n", mouseSegmentVelocity.first, mouseSegmentVelocity.second);
+    double taperFactor = 0.6;
+    double projectedFraction = 1.0 - fminf(1.0, fmaxf(projection, 0.0)) * taperFactor;
+    double R = 10;
+    double m = exp(-l/R); //drag coefficient
+    m *= projectedFraction * projectedFraction;
+    double targetVelocityX = vx * 1 * 1.4; 
+    double targetVelocityY = vy * 1 * 1.4; 
+
+    cuParams.VX[grid_row * width + grid_col] += 
+        (targetVelocityX - cuParams.VX[grid_row * width + grid_col]) * m;
+    cuParams.VY[grid_row * width + grid_col] += 
+        (targetVelocityY - cuParams.VY[grid_row * width + grid_col]) * m;
+
+}
 
 ///////////////////////////HOST CODE BELOW////////////////////////////////
 
@@ -72,6 +163,8 @@ CudaRenderer::CudaRenderer() {
     divergence = NULL;
     vorticity = NULL;
 
+    mpls = NULL;
+
     cdVX = NULL;
     cdVY = NULL;
     cdColor = NULL;
@@ -82,6 +175,8 @@ CudaRenderer::CudaRenderer() {
     cdDivergence = NULL;
     cdVorticity = NULL;
     cdImageData = NULL;
+
+    cdMpls = NULL;
 }
 
 CudaRenderer::~CudaRenderer() {
@@ -98,6 +193,7 @@ CudaRenderer::~CudaRenderer() {
         delete vorticity;
         delete color;
         delete colorCopy;
+        delete mpls;
     }
 
     if (cdVX) {
@@ -111,6 +207,7 @@ CudaRenderer::~CudaRenderer() {
         cudaFree(cdColor);
         cudaFree(cdColorCopy);
         cudaFree(cdImageData);
+        cudaFree(cdMpls);
     }
 }
 
@@ -140,24 +237,25 @@ CudaRenderer::setup() {
 
    cudaMalloc(&cdVX, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVY, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   cudaMalloc(&cdPressures, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   /*cudaMalloc(&cdPressures, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVXCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVYCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdDivergence, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVorticity, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdColor, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   cudaMalloc(&cdColorCopy, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMalloc(&cdColorCopy, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));*/
    cudaMalloc(&cdImageData, 4 * sizeof(float) * image->width * image->height);
+   cudaMalloc(&cdMpls, 400 * sizeof(float) * image->width * image->height);
 
-   cudaMemcpy(cdVX, VX, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdVY, VY, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdPressures, pressures, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdVXCopy, VXCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdVYCopy, VYCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdDivergence, divergence, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdVorticity, vorticity, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdColor, color, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
-   cudaMemcpy(cdColorCopy, colorCopy, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1), cudaMemcpyHostToDevice);
+   cudaMemset(cdVX, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdVY, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   /*cudaMemset(cdPressures, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdVXCopy, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdVYCopy, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdDivergence, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdVorticity, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdColor, 0, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdColorCopy, 0, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));*/
 
     GlobalConstants params;
     params.cells_per_side = cells_per_side;
@@ -165,13 +263,13 @@ CudaRenderer::setup() {
     params.height = image->height;
     params.VX = cdVX;
     params.VY = cdVY;
-    params.pressures = cdPressures;
+    /*params.pressures = cdPressures;
     params.VXCopy = cdVXCopy;
     params.VYCopy = cdVYCopy;
     params.divergence = cdDivergence;
     params.vorticity = cdVorticity;
     params.color = cdColor;
-    params.colorCopy = cdColorCopy;
+    params.colorCopy = cdColorCopy;*/
     params.imageData = cdImageData;
 
     cudaMemcpyToSymbol(cuParams, &params, sizeof(GlobalConstants));
@@ -225,10 +323,38 @@ CudaRenderer::distanceToNearestMouseSegment(double px, double py, double *fp,
     *fp = fpResult;
     std::pair<double,double> msvResult = std::make_pair(vx,vy);
     *mouseSegmentVelocity = msvResult;
-    return minLen;
+    eturn minLen;
 }
 */
 void CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
+
+    int mplsSize = mpls.size();
+    //if (mplsSize == 0) {
+
+    // if mpls.size is 0, then call kernel that decreases VX,VY by 0.999
+    //} else {
+     /*   int* mplsArray = new int[mplsSize * 2 + 1];
+        int count = 0;
+        for (std::vector<std::pair<int,int> >::iterator it = mpls.begin() 
+                ; it != mpls.end(); ++it) {
+            std::pair<int,int> c = *it;
+            mplsArray[count] = c.first;
+            mplsArray[count + 1] = c.second;
+            count += 2;
+        }
+        cudaMemset(cdMpls, 0, 400 * sizeof(int));
+        cudaMemcpy(cdMpls, mplsArray, (mplsSize * 2 + 1) * sizeof(int), cudaMemcpyHostToDevice);
+*/
+        dim3 blockDim(16,16,1);
+        dim3 gridDim(
+                (image->width + blockDim.x - 1) / blockDim.x,
+                (image->height + blockDim.y - 1) / blockDim.y);
+        kernelSetNewVelocities<<<gridDim, blockDim>>>();
+        cudaDeviceSynchronize();
+    //}
+
+
+
     /*mousePressedLocations.clear();
 
     for (std::vector<std::pair<int,int> >::iterator it = mpls.begin() 
@@ -261,13 +387,11 @@ void CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
             double targetVelocityX = vx * 1 * 1.4; 
             double targetVelocityY = vy * 1 * 1.4; 
 
-            //if (vxs[i] != 0.0 || vys[i] != 0.0) {
-                cdVX[grid_row][grid_col] += 
-                    (targetVelocityX - cdVX[grid_row][grid_col]) * m;
-                cdVY[grid_row][grid_col] += 
-                    (targetVelocityY - cdVY[grid_row][grid_col]) * m;
-                //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, grid_col, cdVX[grid_row][grid_col], cdVY[grid_row][grid_col]);
-            //}
+            cdVX[grid_row][grid_col] += 
+                (targetVelocityX - cdVX[grid_row][grid_col]) * m;
+            cdVY[grid_row][grid_col] += 
+                (targetVelocityY - cdVY[grid_row][grid_col]) * m;
+            //printf("setting velocity of row %d col %d to [%f,%f]\n", grid_row, grid_col, cdVX[grid_row][grid_col], cdVY[grid_row][grid_col]);
         }
 
     }*/
@@ -295,7 +419,7 @@ CudaRenderer::clearImage() {
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
-    kernelClearImage<<<gridDim, blockDim>>>(1.f,1.f,1.f,1.f);
+    kernelClearImage<<<gridDim, blockDim>>>(1.f,1.f,0.f,1.f);
     cudaDeviceSynchronize();
 }
 
@@ -552,6 +676,7 @@ CudaRenderer::applyVorticityForce() {
 */
 void
 CudaRenderer::render() {
+    usleep(1000000);
 /*    advectVelocityForward();
     advectVelocityBackward();
     applyVorticity();

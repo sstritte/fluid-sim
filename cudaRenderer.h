@@ -26,6 +26,8 @@ private:
     float* divergence;
     float* vorticity;
 
+    int* mpls;
+
     float* cdVX;
     float* cdVY;
     float* cdColor;
@@ -37,11 +39,13 @@ private:
     float* cdVorticity;
     float* cdImageData;
 
-    /*double distanceToSegment(double ax, double ay, double bx, double by, 
+    int* cdMpls;
+
+    double distanceToSegment(double ax, double ay, double bx, double by, 
         double px, double py, double* fp);
     double distanceToNearestMouseSegment(double px, double py, double *fp, 
             std::pair<double,double>* mouseSegmentVelocity);
-    int isBoundary(int i, int j);
+    /*int isBoundary(int i, int j);
     void advectColor();
     void advectColorForward();
     void advectColorBackward();
