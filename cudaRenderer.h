@@ -11,9 +11,50 @@
 class CudaRenderer : public CircleRenderer {
 
 private:
-
     Image* image;
-    int* mousePressedLocation;
+    std::vector<std::pair<int,int> > mousePressedLocations; 
+
+    int cells_per_side;
+
+    float* VX;
+    float* VY;
+    float* color;
+    float* colorCopy;
+    float* pressures;
+    float* VXCopy;
+    float* VYCopy;
+    float* divergence;
+    float* vorticity;
+
+    float* cdVX;
+    float* cdVY;
+    float* cdColor;
+    float* cdColorCopy;
+    float* cdPressures;
+    float* cdVXCopy;
+    float* cdVYCopy;
+    float* cdDivergence;
+    float* cdVorticity;
+    float* cdImageData;
+
+    /*double distanceToSegment(double ax, double ay, double bx, double by, 
+        double px, double py, double* fp);
+    double distanceToNearestMouseSegment(double px, double py, double *fp, 
+            std::pair<double,double>* mouseSegmentVelocity);
+    int isBoundary(int i, int j);
+    void advectColor();
+    void advectColorForward();
+    void advectColorBackward();
+    void applyPressure();
+    void advectVelocityForward();
+    void advectVelocityBackward();
+    void applyDivergence();
+    void pressureSolve();
+    void pressureGradient();
+    void applyVorticity();
+    void applyVorticityForce();*/
+
+
    
 public:
 

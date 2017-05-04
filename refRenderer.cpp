@@ -23,7 +23,6 @@ RefRenderer::RefRenderer() {
     pressures = NULL;
     advectionCopyX = NULL;
     advectionCopyY = NULL;
-    advectionCopy = NULL;
     divergence = NULL;
     vorticity = NULL;
 }
@@ -65,12 +64,7 @@ RefRenderer::~RefRenderer() {
         }
         delete advectionCopyY;
     }
-    if (advectionCopy) {
-        for (int i = 0; i < cells_per_side + 1; i++) {
-            if (advectionCopy[i]) delete advectionCopy[i];
-        }
-        delete advectionCopy;
-    }
+
     if (divergence) {
         for (int i = 0; i < cells_per_side + 1; i++) {
             if (divergence[i]) delete divergence[i];
@@ -143,10 +137,6 @@ RefRenderer::setup() {
    for (int i = 0; i < cells_per_side + 1; i++) {
     pressures[i] = new float[cells_per_side + 1];
     memset(pressures[i], 0, sizeof(float) * (cells_per_side + 1));
-   }
-   advectionCopy = new float*[cells_per_side + 1];
-   for (int i = 0; i < cells_per_side + 1; i++) {
-    advectionCopy[i] = new float[cells_per_side + 1];
    }
    advectionCopyX = new float*[cells_per_side + 1];
    for (int i = 0; i < cells_per_side + 1; i++) {
@@ -300,63 +290,6 @@ RefRenderer::allocOutputImage(int width, int height) {
 void
 RefRenderer::clearImage() {
     image->clear(1.f, 1.f, 1.f, 1.f);
-}
-
-void RefRenderer::advectBackward(float** quantity) {
-    //Advecting the values
-    for (int row = 0; row < cells_per_side; row++) {
-        for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-           int prevPixelRow = round(pixelRow - TIME_STEP * velocitiesY[row][col] * 1/CELL_DIM);
-           int prevPixelCol = round(pixelCol - TIME_STEP * velocitiesX[row][col] * 1/CELL_DIM);
-           int prevCellCol = prevPixelCol / CELL_DIM;
-           int prevCellRow = prevPixelRow / CELL_DIM;
-
-           if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
-                   && prevCellCol >= 0 && prevCellRow >= 0) {
-                quantity[row][col] = advectionCopy[prevCellRow][prevCellCol];
-           } else {
-                //quantity[row][col] = 0.0;
-           }
-           if (prevCellCol == col && prevCellRow == row) {
-                // you don't move so just disappear
-                quantity[row][col] = 0;
-           }
-        }
-    }
-}
-
-void RefRenderer::advectForward(float** quantity) {
-    //Advecting the values
-    for (int row = 0; row < cells_per_side; row++) {
-        for (int col = 0; col < cells_per_side; col++) {
-           int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
-           int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-           int nextPixelRow = round(pixelRow + TIME_STEP * velocitiesY[row][col] * 1/CELL_DIM);
-           int nextPixelCol = round(pixelCol + TIME_STEP * velocitiesX[row][col] * 1/CELL_DIM);
-           int nextCellCol = nextPixelCol / CELL_DIM;
-           int nextCellRow = nextPixelRow / CELL_DIM;
-
-           if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
-                   && nextCellCol >= 0 && nextCellRow >= 0) {
-                quantity[nextCellRow][nextCellCol] = advectionCopy[row][col];
-           } else {
-                //quantity[nextCellRow][nextCellCol] = 0.0;
-           }
-        }
-    }
-}
-
-void
-RefRenderer::advectQuantity(float** quantity) {
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            advectionCopy[i][j] = quantity[i][j];
-        }
-    }
-    advectForward(quantity);
-    advectBackward(quantity);
 }
 
 void RefRenderer::advectColorBackward() {

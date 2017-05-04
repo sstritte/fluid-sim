@@ -10,10 +10,7 @@ class RefRenderer : public CircleRenderer {
 
 private:
 
-    bool isMouseDown;
-
     Image* image;
-    int* mousePressedLocation;
     std::vector<std::pair<int,int> > mousePressedLocations; 
 
     float** velocitiesX;
@@ -24,7 +21,6 @@ private:
     float** pressures;
     float** advectionCopyX;
     float** advectionCopyY;
-    float** advectionCopy;
     float** divergence;
     float** vorticity;
 
@@ -36,9 +32,6 @@ private:
     void advectColor();
     void advectColorForward();
     void advectColorBackward();
-    void advectQuantity(float** q);
-    void advectForward(float** q);
-    void advectBackward(float** q);
     void applyPressure();
     void advectVelocityForward();
     void advectVelocityBackward();
