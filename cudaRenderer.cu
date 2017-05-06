@@ -118,7 +118,6 @@ __global__ void kernelSetNewVelocities() {
     
     int imageX = grid_col;
     int imageY = grid_row;
-    //if (blockIdx.x != 3) return;
     int offset = 4 * (imageY * width + imageX);
     float4 value = make_float4(1.f,0.f,1.f,1.f);
 
@@ -233,7 +232,7 @@ CudaRenderer::isBoundary(int i, int j) {
 
 void
 CudaRenderer::setup() {
-   cells_per_side = image->width / CELL_DIM;
+   cells_per_side = image->width / CELL_DIM - 1;
 
    cudaMalloc(&cdVX, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVY, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
@@ -271,6 +270,7 @@ CudaRenderer::setup() {
     params.color = cdColor;
     params.colorCopy = cdColorCopy;*/
     params.imageData = cdImageData;
+    params.mpls = cdMpls;
 
     cudaMemcpyToSymbol(cuParams, &params, sizeof(GlobalConstants));
 }
