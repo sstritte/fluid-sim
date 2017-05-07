@@ -12,15 +12,16 @@ class CudaRenderer : public CircleRenderer {
 
 private:
     Image* image;
-    std::vector<std::pair<int,int> > mousePressedLocations; 
 
     int cells_per_side;
+    int mplsSize;
 
     float* VX;
     float* VY;
     float* color;
     float* colorCopy;
     float* pressures;
+    float* pressuresCopy;
     float* VXCopy;
     float* VYCopy;
     float* divergence;
@@ -33,6 +34,7 @@ private:
     float* cdColor;
     float* cdColorCopy;
     float* cdPressures;
+    float* cdPressuresCopy;
     float* cdVXCopy;
     float* cdVYCopy;
     float* cdDivergence;
