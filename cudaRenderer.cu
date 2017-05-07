@@ -202,8 +202,8 @@ __global__ void kernelAdvectVelocityForward() {
 
    int pixelRow = row * CELL_DIM;
    int pixelCol = col * CELL_DIM;
-   int nextPixelRow = round(pixelRow + TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
-   int nextPixelCol = round(pixelCol + TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
+   int nextPixelRow = round(pixelRow + TIME_STEP * cuParams.VYCopy[row * width + col] * CELL_DIM);
+   int nextPixelCol = round(pixelCol + TIME_STEP * cuParams.VXCopy[row * width + col] * CELL_DIM);
    int nextCellCol = nextPixelCol / CELL_DIM;
    int nextCellRow = nextPixelRow / CELL_DIM;
 
@@ -228,8 +228,8 @@ __global__ void kernelAdvectVelocityBackward() {
 
    int pixelRow = row * CELL_DIM;
    int pixelCol = col * CELL_DIM;
-   int prevPixelRow = round(pixelRow - TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
-   int prevPixelCol = round(pixelCol - TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
+   int prevPixelRow = round(pixelRow - TIME_STEP * cuParams.VYCopy[row * width + col] * CELL_DIM);
+   int prevPixelCol = round(pixelCol - TIME_STEP * cuParams.VXCopy[row * width + col] * CELL_DIM);
    int prevCellCol = prevPixelCol / CELL_DIM;
    int prevCellRow = prevPixelRow / CELL_DIM;
 
@@ -492,7 +492,7 @@ __global__ void kernelDrawColor(int mplsSize) {
     double v = sqrt(vx * vx + vy * vy);
 
     if (abs(v) < 0.00001) {
-        // make the cdColor go away faster
+        // make the color go away faster
         cuParams.color[index] *= 0.9;
         cuParams.color[index + 1] *= 0.9;
         cuParams.color[index + 2] *= 0.9;
