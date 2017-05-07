@@ -408,8 +408,11 @@ __global__ void kernelCopyColor() {
     if (col >= width || row >= height) return;
     if (row * width + col >= width * height) return; 
 
-    cuParams.colorCopy[row * width + col] = cuParams.color[row * width + col];
-    cuParams.colorCopy[row * width + col] = cuParams.color[row * width + col];
+    int index = row * width + col;
+    cuParams.colorCopy[index] = cuParams.color[index];
+    cuParams.colorCopy[index + 1] = cuParams.color[index + 1];
+    cuParams.colorCopy[index + 2] = cuParams.color[index + 2];
+    cuParams.colorCopy[index + 3] = cuParams.color[index + 3];
 }
 
 //kernelAdvectColorForward
@@ -722,7 +725,7 @@ CudaRenderer::clearImage() {
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
-    kernelClearImage<<<gridDim, blockDim>>>(1.f,1.f,0.f,1.f);
+    kernelClearImage<<<gridDim, blockDim>>>(1.f,1.f,1.f,1.f);
     cudaDeviceSynchronize();
 }
 
