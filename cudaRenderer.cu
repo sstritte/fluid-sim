@@ -440,10 +440,10 @@ __global__ void kernelAdvectColorForward() {
 
    if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
            && nextCellCol >= 0 && nextCellRow >= 0) {
-        cuParams.color[nextCellRow * width + nextCellCol * 4 + 0] = cuParams.colorCopy[row * width + col * 4 + 0];
-        cuParams.color[nextCellRow * width + nextCellCol * 4 + 1] = cuParams.colorCopy[row * width + col * 4 + 1];
-        cuParams.color[nextCellRow * width + nextCellCol * 4 + 2] = cuParams.colorCopy[row * width + col * 4 + 2];
-        cuParams.color[nextCellRow * width + nextCellCol * 4 + 3] = cuParams.colorCopy[row * width + col * 4 + 3];
+        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 0] = cuParams.colorCopy[(row * width + col) * 4 + 0];
+        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 1] = cuParams.colorCopy[(row * width + col) * 4 + 1];
+        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 2] = cuParams.colorCopy[(row * width + col) * 4 + 2];
+        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 3] = cuParams.colorCopy[(row * width + col) * 4 + 3];
 
    } 
 }
@@ -468,10 +468,10 @@ __global__ void kernelAdvectColorBackward() {
 
     if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
             && prevCellCol >= 0 && prevCellRow >= 0) {
-         cuParams.color[row * width + col * 4 + 0] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 0];
-         cuParams.color[row * width + col * 4 + 1] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 1];
-         cuParams.color[row * width + col * 4 + 2] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 2];
-         cuParams.color[row * width + col * 4 + 3] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 3];
+         cuParams.color[(row * width + col) * 4 + 0] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 0];
+         cuParams.color[(row * width + col) * 4 + 1] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 1];
+         cuParams.color[(row * width + col) * 4 + 2] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 2];
+         cuParams.color[(row * width + col) * 4 + 3] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 3];
    } 
 }
 
