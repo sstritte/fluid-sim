@@ -225,6 +225,193 @@ __global__ void kernelAdvectVelocityBackward() {
    }
 }
 
+//kernelApplyVorticity
+__global__ void kernelApplyVorticity(){
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    if (isBoundary(row,col)) return;
+
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+
+    if (row > 0) T = cuParams.VX[(row-1) * width + col];
+    if (row < cells_per_side) B = cuParams.VX[(row+1) * width + col];
+    if (col < cells_per_side) R = cuParams.VY[row * width + (col+1)];
+    if (col > 0) L = cuParams.VY[row * width + (col-1)];
+    cuParams.vorticity[row * width + col] = 0.5 * ((R - L) - (T - B));
+}
+
+//kernelApplyVorticityForce
+__global__ void kernelApplyVorticityForce(){
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    float vortConfinementFloat = 0.035f;
+    float vortL = 0.0;
+    float vortR = 0.0;
+    float vortB = 0.0;
+    float vortT = 0.0;
+    float vortC = 0.0;
+            
+    if (isBoundary(row,col)) return;
+
+    if (row > 0) vortT = cuParams.vorticity[(row-1) * width + col];
+    if (row < cells_per_side) vortB = cuParams.vorticity[(row+1) * width + col];
+    if (col < cells_per_side) vortR = cuParams.vorticity[row * width + (col+1)];
+    if (row > 0) vortL = cuParams.vorticity[row * width + (col-1)];
+    vortC = cuParams.vorticity[row * width + col];
+    
+    float forceX = 0.5 * (fabsf(vortT) - fabsf(vortB));
+    float forceY = 0.5 * (fabsf(vortR) - fabsf(vortL));
+    float EPSILON = powf(2,-12);
+    float magSqr = fmaxf(EPSILON, forceX * forceX + forceY * forceY);
+    forceX = forceX * (1/sqrtf(magSqr));
+    forceY = forceY * (1/sqrtf(magSqr));
+    forceX *= vortConfinementFloat * vortC * 1;
+    forceY *= vortConfinementFloat * vortC * -1;
+    cuParams.VX[row * width + col] += forceX;
+    cuParams.VY[row * width + col] += forceY;
+}
+
+//kernelApplyDivergence
+__global__ void kernelApplyDivergence(){
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    if (isBoundary(row,col)) return;
+
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+
+    if (row > 0) T = cuParams.VY[(row-1) * width + col];
+    if (row < cells_per_side) B = cuParams.VY[(row+1) * width + col];
+    if (col < cells_per_side) R = cuParams.VX[row * width + (col+1)];
+    if (col > 0) L = cuParams.VX[row * width + (col-1)];
+    cuParams.divergence[row * width + col] = 0.5*((R-L) + (T-B));
+}
+
+//kernelPressureSolve
+__global__ void kernelPressureSolve(){
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    if (isBoundary(row,col)) return;
+
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+
+    if (row > 0) T = cuParams.pressures[(row-1) * width + col];
+    if (row < cells_per_side) B = cuParams.pressures[(row+1) * width + col];
+    if (col < cells_per_side) R = cuParams.pressures[row * width + (col+1)];
+    if (col > 0) L = cuParams.pressures[row * width + (col-1)];
+    // I FEEL LIKE MAYBE WE NEED A SYNCTHREADS() HERE!!!!!!!
+    // BECAUSE IN THE REF WE HAVE A TEMPPRESSURES ARRAY AND COPY EVERYTHING AT THE END
+    // SO THAT EVERYONE IS ALWAYS READING FROM THE OLD PRESSURE ARRAY AND THINGS AREN'T BEING
+    // UPDATED AS THEY GO
+    // ALTERNATIVELY WE COULD HAVE THIS KERNEL MAKE A cuParams.tempPressures IN THIS WAY
+    // AND THEN HAVE  SEPARATE KERNEL (TO CALL AFTER THIS ONE) THAT COPIES cuParams.tempPressures
+    // OVER TO the real cuParams.pressures
+    cuParams.pressures[row * width + col] = (L + R + B + T + -1 * cuParams.divergence[row * width + col]) * .25;
+}
+
+//kernelPressureGradient
+__global__ void kernelPressureGradient(){
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    if (isBoundary(row,col)) return;
+
+    float L = 0.0;
+    float R = 0.0;
+    float B = 0.0;
+    float T = 0.0;
+
+    if (row > 0) T = cuParams.pressures[(row-1) * width + col];
+    if (row < cells_per_side) B = cuParams.pressures[(row+1) * width + col];
+    if (col < cells_per_side) R = cuParams.pressures[row * width + (col+1)];
+    if (col > 0) L = cuParams.pressures[row * width + (col-1)];
+    cuParams.VX[row * width + col] = cuParams.VX[row * width + col] - 0.5*(R - L);
+    cuParams.VY[row * width + col] = cuParams.VY[row * width + col] - 0.5*(T - B);
+}
+
+//kernelAdvectColorForward
+__global__ void kernelAdvectColorForward() {
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    // I HAVE A SIMILAR CONCERN HERE AS THE COMMENT I WROTE ABOVE...
+    // DO WE NEED ALL THE KERNELS TO FINISH POPULATING cuParams.colorCopy
+    // BEFORE THEY START THE REST OF THE LOGIC??? SINCE EACH ACCESSES OTHER PLACES IN
+    // cuParams.colorCopy BELOW. (THIS SAME QUESTION WILL HAVE TO APPLY TO 
+    // kernelAdvectVelocityForward()...)
+    cuParams.colorCopy[row * width + col] = cuParams.color[row * width + col];
+
+    int pixelRow = row * CELL_DIM;
+    int pixelCol = col * CELL_DIM;
+    // THERE ARE A ZILLION VERSION OF ROUNDING FUNCTIONS IN THE CUDA MATH API
+    // http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__SINGLE.html#group__CUDA__MATH__SINGLE
+    // I THINK WE WANT TO CHANGE round(x) TO rint(x).... BUT NOT SURE
+    // SAME CHANGE WOULD NEED TO BE APPLIED IN kernelAdvectVelocityForward() and kernelAdvectVelocityBackward()
+    // and kernelAdvectColorBackward()
+    int nextPixelRow = round(pixelRow + TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
+    int nextPixelCol = round(pixelCol + TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
+    int nextCellCol = nextPixelCol / CELL_DIM;
+    int nextCellRow = nextPixelRow / CELL_DIM;
+
+   if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
+           && nextCellCol >= 0 && nextCellRow >= 0) {
+        // I SPENT LIKE 10 MINUTES TRYING TO CONVINCE MYSELF IF THE col * 4 THING IS RIGHT 
+        // BUT I'M STILL NOT CONVINCED SO WE SHOULD DOUBLE/TRIPLE CHECK THIS
+        cuParams.color[nextCellRow * width + nextCellCol * 4 + 0] = cuParams.colorCopy[row * width + col * 4 + 0];
+        cuParams.color[nextCellRow * width + nextCellCol * 4 + 1] = cuParams.colorCopy[row * width + col * 4 + 1];
+        cuParams.color[nextCellRow * width + nextCellCol * 4 + 2] = cuParams.colorCopy[row * width + col * 4 + 2];
+        cuParams.color[nextCellRow * width + nextCellCol * 4 + 3] = cuParams.colorCopy[row * width + col * 4 + 3];
+
+   } 
+}
+
+//kernelAdvectColorBackward
+__global__ void kernelAdvectColorBackward() {
+    int cells_per_side = cuParams.cells_per_side;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int width = cuParams.width;
+
+    int pixelRow = row * CELL_DIM;
+    int pixelCol = col * CELL_DIM;
+    int prevPixelRow = round(pixelRow - TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
+    int prevPixelCol = round(pixelCol - TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
+    int prevCellCol = prevPixelCol / CELL_DIM;
+    int prevCellRow = prevPixelRow / CELL_DIM;
+
+    if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
+            && prevCellCol >= 0 && prevCellRow >= 0) {
+         cuParams.color[row * width + col * 4 + 0] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 0];
+         cuParams.color[row * width + col * 4 + 1] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 1];
+         cuParams.color[row * width + col * 4 + 2] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 2];
+         cuParams.color[row * width + col * 4 + 3] = cuParams.colorCopy[prevCellRow * width + prevCellCol * 4 + 3];
+   } 
+}
+
 
 //////////////////////////////////////////////////////////////////////////
 ///////////////////////////HOST CODE BELOW////////////////////////////////
@@ -309,25 +496,25 @@ CudaRenderer::setup() {
 
    cudaMalloc(&cdVX, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVY, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   //cudaMalloc(&cdPressures, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMalloc(&cdPressures, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVXCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVYCopy, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   /*cudaMalloc(&cdDivergence, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMalloc(&cdDivergence, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdVorticity, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdColor, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   cudaMalloc(&cdColorCopy, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));*/
+   cudaMalloc(&cdColorCopy, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMalloc(&cdImageData, 4 * sizeof(float) * image->width * image->height);
    cudaMalloc(&cdMpls, 400 * sizeof(float) * image->width * image->height);
 
    cudaMemset(cdVX, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMemset(cdVY, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   //cudaMemset(cdPressures, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdPressures, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMemset(cdVXCopy, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMemset(cdVYCopy, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   /*cudaMemset(cdDivergence, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
+   cudaMemset(cdDivergence, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMemset(cdVorticity, 0, sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
    cudaMemset(cdColor, 0, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
-   cudaMemset(cdColorCopy, 0, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));*/
+   cudaMemset(cdColorCopy, 0, 4 * sizeof(float) * (cells_per_side + 1) * (cells_per_side + 1));
 
     GlobalConstants params;
     params.cells_per_side = cells_per_side;
@@ -335,13 +522,13 @@ CudaRenderer::setup() {
     params.height = image->height;
     params.VX = cdVX;
     params.VY = cdVY;
-    //params.pressures = cdPressures;
+    params.pressures = cdPressures;
     params.VXCopy = cdVXCopy;
     params.VYCopy = cdVYCopy;
-    /*params.divergence = cdDivergence;
+    params.divergence = cdDivergence;
     params.vorticity = cdVorticity;
     params.color = cdColor;
-    params.colorCopy = cdColorCopy;*/
+    params.colorCopy = cdColorCopy;
     params.imageData = cdImageData;
     params.mpls = cdMpls;
 
@@ -409,204 +596,6 @@ CudaRenderer::clearImage() {
     cudaDeviceSynchronize();
 }
 
-/*void CudaRenderer::advectColorBackward() {
-     //Advecting the values in cdColor
-     for (int row = 0; row < cells_per_side; row++) {
-         for (int col = 0; col < cells_per_side; col++) {
-            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
-            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-            int prevPixelRow = round(pixelRow - TIME_STEP * cdVY[row][col] * CELL_DIM);
-            int prevPixelCol = round(pixelCol - TIME_STEP * cdVX[row][col] * CELL_DIM);
-            int prevCellCol = prevPixelCol / CELL_DIM;
-            int prevCellRow = prevPixelRow / CELL_DIM;
- 
-            if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
-                    && prevCellCol >= 0 && prevCellRow >= 0) {
-                 cdColor[row][col][0] = cdColorCopy[prevCellRow][prevCellCol][0];
-                 cdColor[row][col][1] = cdColorCopy[prevCellRow][prevCellCol][1];
-                 cdColor[row][col][2] = cdColorCopy[prevCellRow][prevCellCol][2];
-                 cdColor[row][col][3] = cdColorCopy[prevCellRow][prevCellCol][3];
-            } 
-         }
-     }
- }
- 
- void CudaRenderer::advectColorForward() {
-     //Advecting the values in cdColor
-     for (int row = 0; row < cells_per_side; row++) {
-         for (int col = 0; col < cells_per_side; col++) {
-            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
-            int pixelCol = col * CELL_DIM;// + CELL_DIM/2;
-            int nextPixelRow = round(pixelRow + TIME_STEP * cdVY[row][col] * CELL_DIM);
-            int nextPixelCol = round(pixelCol + TIME_STEP * cdVX[row][col] * CELL_DIM);
-            int nextCellCol = nextPixelCol / CELL_DIM;
-            int nextCellRow = nextPixelRow / CELL_DIM;
- 
-            if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
-                    && nextCellCol >= 0 && nextCellRow >= 0) {
-                 cdColor[nextCellRow][nextCellCol][0] = cdColorCopy[row][col][0];
-                 cdColor[nextCellRow][nextCellCol][1] = cdColorCopy[row][col][1];
-                 cdColor[nextCellRow][nextCellCol][2] = cdColorCopy[row][col][2];
-                 cdColor[nextCellRow][nextCellCol][3] = cdColorCopy[row][col][3];
-            } 
-         }
-     }
- }
- 
-
-void
-CudaRenderer::advectColor() {
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            for (int k = 0; k < 4; k++) {
-                cdColorCopy[i][j][k] = cdColor[i][j][k];
-            }
-        }
-    }
-    advectColorForward();
-    advectColorBackward();
-}
-
-
-void
-CudaRenderer::applyPressure() {
-    for (int i = 0; i < cells_per_side; i ++) {
-        for (int j = 0; j < cells_per_side; j++) {
-            float force_x = (cdPressures[i][j] - cdPressures[i][j+1]);
-            float force_y = (cdPressures[i][j] - cdPressures[i+1][j]);
-            cdVX[i][j] += force_x;
-            cdVX[i][j+1] += force_x;
-            cdVY[i][j] += force_y;
-            cdVY[i+1][j] += force_y;
-            //if (force_x != 0) printf("adding force_x %f to (%d,%d)\n", force_x, i, j);
-        }
-    }
-}
-
-
-// Divergence of velocity: This computes how divergent the velocity field is
-// (how much in/out flow there is at every point).  Used as input to the 
-// pressure solve below.
-void
-CudaRenderer::applyDivergence() {
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            if (isBoundary(i,j)) continue;
-            
-            if (i > 0) T = cdVY[i-1][j];
-            if (i < cells_per_side) B = cdVY[i+1][j];
-            if (j < cells_per_side) R = cdVX[i][j+1];
-            if (j > 0) L = cdVX[i][j-1];
-            cdDivergence[i][j] = 0.5*((R-L) + (T-B));   
-        }
-    }
-}
-
-void
-CudaRenderer::pressureSolve() {
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-    float** tempPressure = new float*[cells_per_side + 1];
-    for(int i = 0; i < cells_per_side+1; i++) {
-        tempPressure[i] = new float[cells_per_side+1];
-    }
-
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            if (isBoundary(i,j)) continue;
-            if (i > 0) T = cdPressures[i-1][j];
-            if (i < cells_per_side) B = cdPressures[i+1][j];
-            if (j < cells_per_side) R = cdPressures[i][j+1];
-            if (j > 0) L = cdPressures[i][j-1];
-            tempPressure[i][j] = (L + R + B + T + -1 * cdDivergence[i][j]) * .25;
-                //if (L+R+B+T > 0.0) printf("L+R+B+T is %f, -1*cdDivergence is %f\n", L+R+B+T, -1*cdDivergence[i][j]);
-        }
-    }
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) { 
-            if (isBoundary(i,j)) continue;
-            cdPressures[i][j] = tempPressure[i][j];
-        }
-    }
-
-}
-
-void
-CudaRenderer::pressureGradient() {
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            if (isBoundary(i,j)) continue;
-            if (i > 0) T = cdPressures[i-1][j];
-            if (i < cells_per_side) B = cdPressures[i+1][j];
-            if (j < cells_per_side) R = cdPressures[i][j+1];
-            if (j > 0) L = cdPressures[i][j-1];
-
-            //if (cdVY[i][j] > 10) printf("doing cdVY = %f - 0.5*(%f)\n", cdVY[i][j], T-B);
-            cdVX[i][j] = cdVX[i][j] - 0.5*(R - L);
-            cdVY[i][j] = cdVY[i][j] - 0.5*(T - B);
-            //if (cdVY[i][j] != 0.0) printf("cdVY is %f\n", cdVY[i][j]);
-        }
-    }
-}
-
-void
-CudaRenderer::applyVorticity() {
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            if (isBoundary(i,j)) continue;
-            if (i > 0) T = cdVX[i-1][j];
-            if (i < cells_per_side) B = cdVX[i+1][j];
-            if (j < cells_per_side) R = cdVY[i][j+1];
-            if (j > 0) L = cdVY[i][j-1];
-            cdVorticity[i][j] = 0.5 * ((R - L) - (T - B));
-        }
-    }
-}
-
-void
-CudaRenderer::applyVorticityForce() {
-    float vortConfinementFloat = 0.035f;
-    float vortL = 0.0;
-    float vortR = 0.0;
-    float vortB = 0.0;
-    float vortT = 0.0;
-    float vortC = 0.0;
-    for (int i = 0; i < cells_per_side + 1; i++) {
-        for (int j = 0; j < cells_per_side + 1; j++) {
-            if (isBoundary(i,j)) continue;
-            if (i > 0) vortT = cdVorticity[i-1][j];
-            if (i < cells_per_side) vortB = cdVorticity[i+1][j];
-            if (j < cells_per_side) vortR = cdVorticity[i][j+1];
-            if (j > 0) vortL = cdVorticity[i][j-1];
-            vortC = cdVorticity[i][j];
-            float forceX = 0.5 * (abs(vortT) - abs(vortB));
-            float forceY = 0.5 * (abs(vortR) - abs(vortL));
-            float EPSILON = pow(2,-12);
-            float magSqr = std::max(EPSILON, forceX * forceX + forceY * forceY);
-            forceX = forceX * (1/sqrt(magSqr));
-            forceY = forceY * (1/sqrt(magSqr));
-            forceX *= vortConfinementFloat * vortC * 1;
-            forceY *= vortConfinementFloat * vortC * -1;
-            cdVX[i][j] += forceX;
-            cdVY[i][j] += forceY;
-        }
-    }
-}
-*/
 void
 CudaRenderer::render() {
 //    usleep(1000000);
@@ -614,21 +603,39 @@ CudaRenderer::render() {
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
+    
     kernelAdvectVelocityForward<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
     kernelAdvectVelocityBackward<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
+    kernelApplyVorticity<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    kernelApplyVorticityForce<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    kernelApplyDivergence<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    kernelPressureSolve<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    kernelPressureGradient<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+   
+    //TO DO: DRAW STUFF
+  
+    kernelAdvectColorForward<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
+    kernelAdvectColorBackward<<<gridDim, blockDim>>>();
+    cudaDeviceSynchronize();
 
 
-/*    advectVelocityForward();
-    advectVelocityBackward();
-    applyVorticity();
-    applyVorticityForce();
-    applyDivergence();
-    pressureSolve();
-    pressureGradient();
+    //advectVelocityForward();
+    //advectVelocityBackward();
+    //applyVorticity();
+    //applyVorticityForce();
+    //applyDivergence();
+    //pressureSolve();
+    //pressureGradient();
 
-    // Draw
+    /*// Draw
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
             int grid_col = ((i/4) % image->width) / (CELL_DIM);
