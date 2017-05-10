@@ -42,7 +42,7 @@ struct GlobalConstants {
 __constant__ GlobalConstants cuParams;
 
 // kernelClearImage
-__global__ void kernelClearImage(cudaSurfaceObject_t s, float r, float g, float b, float a) {
+__global__ void kernelClearImage(float r, float g, float b, float a) {
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -51,14 +51,11 @@ __global__ void kernelClearImage(cudaSurfaceObject_t s, float r, float g, float 
 
     if (imageX >= width || imageY >= height) return;
 
-    //int offset = 4 * (imageY * width + imageX);
+    int offset = 4 * (imageY * width + imageX);
     float4 value = make_float4(r,g,b,a);
     
     // Write to global memory.
-    //*(float4*)(&cuParams.imageData[offset]) = value;
-    //uchar4 data = make_uchar4(0x00,0x99,0xcc, 0xff);
-    uchar4 data = make_uchar4(0xff,0x00,0xff, 0xff);
-    surf2Dwrite(data, s, imageX * sizeof(uchar4), imageY);
+    *(float4*)(&cuParams.imageData[offset]) = value;
 
 }
 
@@ -479,7 +476,7 @@ __global__ void kernelAdvectColorBackward() {
 }
 
 //kernelDrawColor
-__global__ void kernelDrawColor(int mplsSize, cudaSurfaceObject_t s) {
+__global__ void kernelDrawColor(int mplsSize) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int row = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
@@ -538,13 +535,6 @@ __global__ void kernelDrawColor(int mplsSize, cudaSurfaceObject_t s) {
     cuParams.imageData[index + 1] = cuParams.color[index + 1];
     cuParams.imageData[index + 2] = cuParams.color[index + 2];
     cuParams.imageData[index + 3] = cuParams.color[index + 3];
-
-    /*uchar4 data = make_uchar4(cuParams.color[index] * 255,
-                            (cuParams.color[index] + 1) * 255,
-                            (cuParams.color[index] + 2) * 255,
-                            (cuParams.color[index] + 3));
-    data = make_uchar4(0x00, 0x99, 0xcc, 0xff);*/
-    //surf2Dwrite(data, s, col * sizeof(uchar4), row);
 
 }
 
@@ -730,17 +720,17 @@ CudaRenderer::allocOutputImage(int width, int height) {
 //
 // Clear's the renderer's target image.  
 void
-CudaRenderer::clearImage(cudaSurfaceObject_t s) {
+CudaRenderer::clearImage() {
     dim3 blockDim(16,16,1);
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
-    kernelClearImage<<<gridDim, blockDim>>>(s, 1.f,1.f,1.f,1.f);
+    kernelClearImage<<<gridDim, blockDim>>>(1.f,1.f,1.f,1.f);
     cudaDeviceSynchronize();
 }
 
 void
-CudaRenderer::render(cudaSurfaceObject_t s) {
+CudaRenderer::render() {
     dim3 blockDim(16,16,1);
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
@@ -770,7 +760,7 @@ CudaRenderer::render(cudaSurfaceObject_t s) {
     cudaDeviceSynchronize();
    
     //DRAW STUFF
-    kernelDrawColor<<<gridDim, blockDim>>>(mplsSize, s);
+    kernelDrawColor<<<gridDim, blockDim>>>(mplsSize);
     cudaDeviceSynchronize();
  
     kernelCopyColor<<<gridDim,blockDim>>>();

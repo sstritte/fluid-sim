@@ -7,10 +7,6 @@
 
 #include "circleRenderer.h"
 
-#include "platformgl.h"
-#include <cuda.h>
-#include <cuda_runtime_api.h>
-#include <cuda_gl_interop.h>
 
 class CudaRenderer : public CircleRenderer {
 
@@ -79,9 +75,9 @@ public:
 
     void allocOutputImage(int width, int height);
 
-    void clearImage(cudaSurfaceObject_t s);
+    void clearImage();
 
-    void render(cudaSurfaceObject_t s);
+    void render();
 };
 
 

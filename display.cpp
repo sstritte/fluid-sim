@@ -6,18 +6,11 @@
 #include "circleRenderer.h"
 #include "cycleTimer.h"
 #include "image.h"
-
 #include "platformgl.h"
-#include <cuda.h>
-#include <cuda_runtime_api.h>
-#include <cuda_gl_interop.h>
+
 
 void renderPicture();
 
-GLuint writeTex;
-struct cudaGraphicsResource *writeRes;
-cudaArray_t writeArray; 
-cudaSurfaceObject_t writeSurface;
 
 static struct {
     int width;
@@ -44,7 +37,6 @@ handleReshape(int w, int h) {
 void
 handleDisplay() {
 
-    //printf("starting handleDisplay()\n");
     // simulation and rendering work is done in the renderPicture
     // function below
 
@@ -78,33 +70,17 @@ handleDisplay() {
     // and then bind this surface as a texture enabling it's use in
     // normal openGL rendering
     glRasterPos2i(0, 0);
-    //glDrawPixels(width, height, GL_RGBA, GL_FLOAT, img->data);//newColors);
-
-    /*char *data = new char[4 * gDisplay.width * gDisplay.height];
-    glBindTexture(GL_TEXTURE_2D, writeTex);
-    {
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
-    for (int i = 0; i < 4 * gDisplay.width * gDisplay.height; i+=4) {
-        data[i] = 0x00;
-        data[i+1] = 0xff;
-        data[i+2] = 0x00;
-        data[i+3] = 0xff;
-    }
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img->width, img->height, 0,
-            GL_RGBA, GL_UNSIGNED_BYTE, data);*/
+    glDrawPixels(width, height, GL_RGBA, GL_FLOAT, img->data);//newColors);
 
     double currentTime = CycleTimer::currentSeconds();
 
     if (gDisplay.printStats)
-        printf("Entire thing: %.2f ms\n", 1000.f * (currentTime - gDisplay.lastFrameTime));
+        printf("%.2f ms\n", 1000.f * (currentTime - gDisplay.lastFrameTime));
 
     gDisplay.lastFrameTime = currentTime;
 
-    //glutSwapBuffers();
+    glutSwapBuffers();
     glutPostRedisplay();
-
 }
 
 
@@ -125,11 +101,8 @@ handleKeyPress(unsigned char key, int x, int y) {
 void handleMouseClick(int button, int state, int x, int y) {
     if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         //gDisplay.isMouseDown = true;
-        int index = (gDisplay.height - y - 1) * gDisplay.width + x;
-        if (0 <= index && index < gDisplay.height * gDisplay.width) {
-            std::pair<int, int> coords = std::make_pair(x,gDisplay.height - y);
-            gDisplay.mousePressedLocations.push_back(coords);
-        }
+        std::pair<int, int> coords = std::make_pair(x,gDisplay.height - y);
+        gDisplay.mousePressedLocations.push_back(coords);
     } else if(button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
         //gDisplay.isMouseDown = false;
     } 
@@ -156,41 +129,18 @@ renderPicture() {
 
     double startTime = CycleTimer::currentSeconds();
 
-    cudaError_t e = cudaGraphicsMapResources(1, &writeRes);
-    e = cudaGraphicsSubResourceGetMappedArray(&writeArray, writeRes, 0, 0);
-    cudaResourceDesc wdsc;
-    wdsc.resType = cudaResourceTypeArray;
-    wdsc.res.array.array = writeArray;
-    e = cudaCreateSurfaceObject(&writeSurface, &wdsc);
-
     // clear screen
-    gDisplay.renderer->clearImage(writeSurface);
+    gDisplay.renderer->clearImage();
 
     double endClearTime = CycleTimer::currentSeconds();
 
     // SEND RELEVANT INFO BEFORE RENDERING
-    /*gDisplay.renderer->setNewQuantities(gDisplay.mousePressedLocations);
+    gDisplay.renderer->setNewQuantities(gDisplay.mousePressedLocations);
 
     gDisplay.mousePressedLocations.clear();
 
     // RENDER THE PARTICLES INTO THE IMAGE
-    gDisplay.renderer->render(writeSurface);*/
-
-    e = cudaDestroySurfaceObject(writeSurface);
-    e = cudaGraphicsUnmapResources(1, &writeRes);
-    e = cudaStreamSynchronize(0);
-
-    /*char *data = new char[4 * gDisplay.width * gDisplay.height];
-    glBindTexture(GL_TEXTURE_2D, writeTex);
-    {
-        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    }
-    glBindTexture(GL_TEXTURE_2D, 0);
-    for (int i = 0; i < 8; i ++) {
-        printf("%02X ", data[i]);
-    }
-    printf("\n");*/
-
+    gDisplay.renderer->render();
     double endRenderTime = CycleTimer::currentSeconds();
 
     if (gDisplay.printStats) {
@@ -215,17 +165,6 @@ startRendererWithDisplay(CircleRenderer* renderer) {
     glutInitWindowSize(gDisplay.width, gDisplay.height);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutCreateWindow("CMU 15-418 Final Project - Fluid Simulator");
-
-    glGenTextures(1, &writeTex);
-    glBindTexture(GL_TEXTURE_2D, writeTex);
-    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img->width, img->height, 0,
-    //        GL_RGBA, GL_FLOAT, NULL);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    cudaError_t e = cudaGLSetGLDevice(0);
-    e = cudaGraphicsGLRegisterImage(&writeRes, writeTex, GL_TEXTURE_2D, 
-            cudaGraphicsRegisterFlagsSurfaceLoadStore);
-
     glutDisplayFunc(handleDisplay);
     glutKeyboardFunc(handleKeyPress);
     glutMouseFunc(handleMouseClick);
