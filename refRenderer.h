@@ -6,6 +6,10 @@
 #include <utility> // std::pair
 #include <vector>
 
+#include "platformgl.h"
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuda_gl_interop.h>
 class RefRenderer : public CircleRenderer {
 
 private:
@@ -53,9 +57,9 @@ public:
 
     void allocOutputImage(int width, int height);
 
-    void clearImage();
+    void clearImage(cudaSurfaceObject_t s);
 
-    void render();
+    void render(cudaSurfaceObject_t s);
 };
 
 

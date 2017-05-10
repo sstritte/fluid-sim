@@ -21,7 +21,7 @@ LIBS       :=
 FRAMEWORKS :=
 
 NVCCFLAGS=-O0 -g -m64 --gpu-architecture compute_35
-LIBS += GL glut cudart
+LIBS += GL glut GLEW cudart
 
 ifneq ($(wildcard /opt/cuda-8.0/.*),)
 # Latedays
@@ -57,7 +57,7 @@ $(EXECUTABLE): dirs $(OBJS)
 		$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(LDLIBS) $(LDFRAMEWORKS)
 
 $(OBJDIR)/%.o: %.cpp
-		$(CXX) $< $(CXXFLAGS) -c -o $@
+		$(NVCC) $< $(NVCCFLAGS) -c -o $@
 
 $(OBJDIR)/%.o: %.cu
 		$(NVCC) $< $(NVCCFLAGS) -c -o $@

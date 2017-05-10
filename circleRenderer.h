@@ -4,6 +4,10 @@
 #include <vector>
 #include <utility>
 
+#include "platformgl.h"
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuda_gl_interop.h>
 struct Image;
 
 class CircleRenderer {
@@ -20,9 +24,9 @@ public:
 
     virtual void allocOutputImage(int width, int height) = 0;
 
-    virtual void clearImage() = 0;
+    virtual void clearImage(cudaSurfaceObject_t s) = 0;
 
-    virtual void render() = 0;
+    virtual void render(cudaSurfaceObject_t s) = 0;
 
 };
 

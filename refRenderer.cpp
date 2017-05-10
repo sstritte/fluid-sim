@@ -10,6 +10,11 @@
 #include "image.h"
 #include "util.h"
 
+#include "platformgl.h"
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuda_gl_interop.h>
+
 #define CELL_DIM 1
 #define TIME_STEP 1
 
@@ -288,7 +293,7 @@ RefRenderer::allocOutputImage(int width, int height) {
 //
 // Clear's the renderer's target image.  
 void
-RefRenderer::clearImage() {
+RefRenderer::clearImage(cudaSurfaceObject_t s) {
     image->clear(1.f, 1.f, 1.f, 1.f);
 }
 
@@ -544,7 +549,7 @@ RefRenderer::applyVorticityForce() {
 }
 
 void
-RefRenderer::render() {
+RefRenderer::render(cudaSurfaceObject_t s) {
     advectVelocityForward();
     advectVelocityBackward();
     applyVorticity();
