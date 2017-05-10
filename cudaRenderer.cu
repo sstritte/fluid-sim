@@ -411,7 +411,7 @@ __global__ void kernelCopyColor() {
     if (col >= width || row >= height) return;
     if (row * width + col >= width * height) return; 
 
-    int index = 4 * (row * width + col);
+    int index = row * width + col;
     cuParams.colorCopy[index] = cuParams.color[index];
     cuParams.colorCopy[index + 1] = cuParams.color[index + 1];
     cuParams.colorCopy[index + 2] = cuParams.color[index + 2];
