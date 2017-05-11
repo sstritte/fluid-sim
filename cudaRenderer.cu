@@ -16,7 +16,7 @@
 
 #define CELL_DIM 1
 #define TIME_STEP 1
-
+#define BLOCKSIZE 16*16
 
 ///////////////////////////CUDA CODE BELOW////////////////////////////////
 struct GlobalConstants {
@@ -67,6 +67,16 @@ isBoundary(int i, int j) {
     if (i == 0) return 2; // top
     if (j == cells_per_side) return 3; // right
     if (i == cells_per_side) return 4; // bottom
+    return 0;
+}
+
+__device__ __inline__ int
+isInBox(int row, int col, int blockDimX, int blockDimY, int blockIdxX, int blockIdxY) {
+    int minRow = blockIdxY * blockDimY;
+    int maxRow = minRow + blockDimY;
+    int minCol = blockIdxX * blockDimX;
+    int maxCol = minCol + blockDimX;
+    if (row >= minRow && row < maxRow && col >= minCol && col < maxCol) return 1;
     return 0;
 }
 
@@ -248,89 +258,228 @@ __global__ void kernelAdvectVelocityBackward() {
 //kernelApplyVorticity
 __global__ void kernelApplyVorticity(){
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    // SIENNA - is it bad if some threads return but then later we 
+    // call __syncthreads() ??
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
+    
+    //int blockSize = blockDim.x * blockDim.y;
+    __shared__ float sharedVX[BLOCKSIZE];
+    __shared__ float sharedVY[BLOCKSIZE];
+    sharedVX[rowInBox * boxWidth + colInBox] = 
+        cuParams.VX[rowOnScreen * width + colOnScreen];
+    sharedVY[rowInBox * boxWidth + colInBox] = 
+        cuParams.VY[rowOnScreen * width + colOnScreen];
+   
+    __syncthreads(); //now everything in the box should be loaded into shared mem.
 
-    if (isBoundary(row,col)) return;
-
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-
-    if (row > 0) T = cuParams.VX[(row-1) * width + col];
-    if (row < cells_per_side) B = cuParams.VX[(row+1) * width + col];
-    if (col < cells_per_side) R = cuParams.VY[row * width + (col+1)];
-    if (col > 0) L = cuParams.VY[row * width + (col-1)];
-    cuParams.vorticity[row * width + col] = 0.5 * ((R - L) - (T - B));
+    //if (isBoundary(row,col)) return;
+    if (!isBoundary(rowOnScreen,colOnScreen)) {
+        float L = 0.0;
+        float R = 0.0;
+        float B = 0.0;
+        float T = 0.0;
+        int r = 0;
+        int c = 0;
+        if (rowOnScreen > 0) {
+            if (isInBox(rowOnScreen-1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen - 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                T = sharedVX[r*boxWidth + c];
+                //if (blockIdx.x == 3 && blockIdx.y == 3) printf("T from shared\n");
+            } else {
+                T = cuParams.VX[(rowOnScreen-1) * width + colOnScreen];
+                //if (blockIdx.x == 3 && blockIdx.y == 3) printf("%d, %d\n", rowInBox, colInBox);
+            }
+        }
+        if (rowOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen+1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen + 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                B = sharedVX[r*boxWidth + c];
+                //if (blockIdx.x == 0 && blockIdx.y == 0) printf("B from shared\n");
+            } else {
+                B = cuParams.VX[(rowOnScreen+1) * width + colOnScreen];
+            }
+        }
+        if (colOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen, colOnScreen+1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen + 1) % blockDim.x;
+                R = sharedVY[r*boxWidth + c];
+                //if (blockIdx.x == 0 && blockIdx.y == 0) printf("R from shared\n");
+            } else {
+                R = cuParams.VY[rowOnScreen * width + (colOnScreen+1)];
+            }
+        }
+        if (colOnScreen > 0) {
+            if (isInBox(rowOnScreen, colOnScreen-1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen - 1) % blockDim.x;
+                L = sharedVY[r*boxWidth + c];
+                //if (blockIdx.x == 0 && blockIdx.y == 0) printf("L from shared\n");
+            } else {
+                L = cuParams.VY[rowOnScreen * width + (colOnScreen-1)];
+            }
+        }
+        cuParams.vorticity[rowOnScreen * width + colOnScreen] = 0.5 * ((R - L) - (T - B));
+    }
 }
 
 //kernelApplyVorticityForce
 __global__ void kernelApplyVorticityForce(){
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    float vortConfinementFloat = 0.035f;
-    float vortL = 0.0;
-    float vortR = 0.0;
-    float vortB = 0.0;
-    float vortT = 0.0;
-    float vortC = 0.0;
+    __shared__ float sharedVort[BLOCKSIZE];
+   sharedVort[rowInBox * boxWidth + colInBox] =
+       cuParams.vorticity[rowOnScreen * width + colOnScreen];
+   __syncthreads();
+
             
-    if (isBoundary(row,col)) return;
+    if (!isBoundary(rowOnScreen,colOnScreen)) {
+        float vortConfinementFloat = 0.035f;
+        float vortL = 0.0;
+        float vortR = 0.0;
+        float vortB = 0.0;
+        float vortT = 0.0;
+        float vortC = 0.0;
+        int r = 0;
+        int c= 0;
 
-    if (row > 0) vortT = cuParams.vorticity[(row-1) * width + col];
-    if (row < cells_per_side) vortB = cuParams.vorticity[(row+1) * width + col];
-    if (col < cells_per_side) vortR = cuParams.vorticity[row * width + (col+1)];
-    if (row > 0) vortL = cuParams.vorticity[row * width + (col-1)];
-    vortC = cuParams.vorticity[row * width + col];
-    
-    float forceX = 0.5 * (fabsf(vortT) - fabsf(vortB));
-    float forceY = 0.5 * (fabsf(vortR) - fabsf(vortL));
-    float EPSILON = powf(2,-12);
-    float magSqr = fmaxf(EPSILON, forceX * forceX + forceY * forceY);
-    forceX = forceX * (1/sqrtf(magSqr));
-    forceY = forceY * (1/sqrtf(magSqr));
-    forceX *= vortConfinementFloat * vortC * 1;
-    forceY *= vortConfinementFloat * vortC * -1;
-    cuParams.VX[row * width + col] += forceX;
-    cuParams.VY[row * width + col] += forceY;
+        if (rowOnScreen > 0) {
+           if (isInBox(rowOnScreen-1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen - 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                vortT = sharedVort[r * boxWidth + c];
+           } else {
+               vortT = cuParams.vorticity[(rowOnScreen-1) * width + colOnScreen];
+           }
+        }
+        if (rowOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen+1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen + 1) % blockDim.y; 
+                c = colOnScreen % blockDim.x;
+                vortB = sharedVort[r * boxWidth + c];
+            } else {
+                vortB = cuParams.vorticity[(rowOnScreen+1) * width + colOnScreen];
+            }
+        }
+        if (colOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen, colOnScreen+1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen+1) % blockDim.x;
+                vortR = sharedVort[r * boxWidth + c];
+            } else {
+                vortR = cuParams.vorticity[rowOnScreen * width + (colOnScreen+1)];
+            }
+        }
+        if (rowOnScreen > 0) {
+            if (isInBox(rowOnScreen, colOnScreen-1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen-1) % blockDim.x;
+                vortL = sharedVort[r * boxWidth + c];
+            } else {
+                vortL = cuParams.vorticity[rowOnScreen * width + (colOnScreen-1)];
+            }
+        }
+        vortC = cuParams.vorticity[rowOnScreen * width + colOnScreen];
+        
+        float forceX = 0.5 * (fabsf(vortT) - fabsf(vortB));
+        float forceY = 0.5 * (fabsf(vortR) - fabsf(vortL));
+        float EPSILON = powf(2,-12);
+        float magSqr = fmaxf(EPSILON, forceX * forceX + forceY * forceY);
+        forceX = forceX * (1/sqrtf(magSqr));
+        forceY = forceY * (1/sqrtf(magSqr));
+        forceX *= vortConfinementFloat * vortC * 1;
+        forceY *= vortConfinementFloat * vortC * -1;
+        cuParams.VX[rowOnScreen * width + colOnScreen] += forceX;
+        cuParams.VY[rowOnScreen * width + colOnScreen] += forceY;
+    }
 }
 
 //kernelApplyDivergence
-__global__ void kernelApplyDivergence(){
+__global__ void kernelApplyDivergence() {
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    if (isBoundary(row,col)) return;
+    __shared__ float sharedVX[BLOCKSIZE];
+    __shared__ float sharedVY[BLOCKSIZE];
+    sharedVX[rowInBox * boxWidth + colInBox] = 
+        cuParams.VX[rowOnScreen * width + colOnScreen];
+    sharedVY[rowInBox * boxWidth + colInBox] = 
+        cuParams.VY[rowOnScreen * width + colOnScreen];
+     __syncthreads();
 
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
+    if (!isBoundary(rowOnScreen,colOnScreen)) {
+        float L = 0.0;
+        float R = 0.0;
+        float B = 0.0;
+        float T = 0.0;
+        int r = 0;
+        int c = 0;
 
-    if (row > 0) T = cuParams.VY[(row-1) * width + col];
-    if (row < cells_per_side) B = cuParams.VY[(row+1) * width + col];
-    if (col < cells_per_side) R = cuParams.VX[row * width + (col+1)];
-    if (col > 0) L = cuParams.VX[row * width + (col-1)];
-    cuParams.divergence[row * width + col] = 0.5*((R-L) + (T-B));
+        if (rowOnScreen > 0) {
+            if (isInBox(rowOnScreen-1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen - 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                T = sharedVY[r * boxWidth + c];
+            } else {
+                T = cuParams.VY[(rowOnScreen-1) * width + colOnScreen];
+            }
+        }
+        if (rowOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen+1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen + 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                B = sharedVY[r * boxWidth + c];
+            } else {
+                B = cuParams.VY[(rowOnScreen+1) * width + colOnScreen];
+            }
+        }
+        if (colOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen, colOnScreen+1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen+1) % blockDim.x;
+                R = sharedVX[r * boxWidth + c];
+            } else {
+                R = cuParams.VX[rowOnScreen * width + (colOnScreen+1)];
+            }
+        }
+        if (colOnScreen > 0) {
+            if (isInBox(rowOnScreen, colOnScreen-1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen-1) % blockDim.x;
+                L = sharedVX[r * boxWidth + c];
+            } else {
+                L = cuParams.VX[rowOnScreen * width + (colOnScreen-1)];
+            }
+        }
+        cuParams.divergence[rowOnScreen * width + colOnScreen] = 0.5*((R-L) + (T-B));
+    }
 }
 
 //kernelCopyPressures
@@ -350,52 +499,136 @@ __global__ void kernelCopyPressures() {
 //kernelPressureSolve
 __global__ void kernelPressureSolve(){
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    if (isBoundary(row,col)) return;
+    __shared__ float sharedPressuresCopy[BLOCKSIZE];
+    sharedPressuresCopy[rowInBox * boxWidth + colInBox] =
+       cuParams.pressuresCopy[rowOnScreen * width + colOnScreen];
+    __syncthreads();
+    
+    if (!isBoundary(rowOnScreen,colOnScreen)) {
+        float L = 0.0;
+        float R = 0.0;
+        float B = 0.0;
+        float T = 0.0;
+        int r = 0;
+        int c = 0;
 
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
-
-    if (row > 0) T = cuParams.pressuresCopy[(row-1) * width + col];
-    if (row < cells_per_side) B = cuParams.pressuresCopy[(row+1) * width + col];
-    if (col < cells_per_side) R = cuParams.pressuresCopy[row * width + (col+1)];
-    if (col > 0) L = cuParams.pressuresCopy[row * width + (col-1)];
-    cuParams.pressures[row * width + col] = (L + R + B + T + -1 * cuParams.divergence[row * width + col]) * .25;
+        if (rowOnScreen > 0) {
+            if (isInBox(rowOnScreen-1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen - 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                T = sharedPressuresCopy[r * boxWidth + c];
+            } else {
+                T = cuParams.pressuresCopy[(rowOnScreen-1) * width + colOnScreen];
+            }
+        }
+        if (rowOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen+1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen + 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                B = sharedPressuresCopy[r * boxWidth + c];
+            } else {
+                B = cuParams.pressuresCopy[(rowOnScreen+1) * width + colOnScreen];
+            }
+        }
+        if (colOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen, colOnScreen+1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen+1) % blockDim.x;
+                R = sharedPressuresCopy[r * boxWidth + c];
+            } else { 
+                R = cuParams.pressuresCopy[rowOnScreen * width + (colOnScreen+1)];
+            }
+        }
+        if (colOnScreen > 0) {
+            if (isInBox(rowOnScreen, colOnScreen-1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen-1) % blockDim.x;
+                L = sharedPressuresCopy[r * boxWidth + c];
+            } else {
+                L = cuParams.pressuresCopy[rowOnScreen * width + (colOnScreen-1)];
+            }
+        }
+        cuParams.pressures[rowOnScreen * width + colOnScreen] = 
+            (L + R + B + T + -1 * cuParams.divergence[rowOnScreen * width + colOnScreen]) * .25;
+    }
 }
 
 //kernelPressureGradient
 __global__ void kernelPressureGradient(){
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    if (isBoundary(row,col)) return;
+    __shared__ float sharedPressures[BLOCKSIZE];
+    sharedPressures[rowInBox * boxWidth + colInBox] = 
+        cuParams.pressures[rowOnScreen * width + colOnScreen];
+    __syncthreads(); //now everything in the box should be loaded into shared mem.
+    
+    if (!isBoundary(rowOnScreen,colOnScreen)) {
 
-    float L = 0.0;
-    float R = 0.0;
-    float B = 0.0;
-    float T = 0.0;
+        float L = 0.0;
+        float R = 0.0;
+        float B = 0.0;
+        float T = 0.0;
+        int r = 0;
+        int c = 0;
 
-    if (row > 0) T = cuParams.pressures[(row-1) * width + col];
-    if (row < cells_per_side) B = cuParams.pressures[(row+1) * width + col];
-    if (col < cells_per_side) R = cuParams.pressures[row * width + (col+1)];
-    if (col > 0) L = cuParams.pressures[row * width + (col-1)];
-    cuParams.VX[row * width + col] = cuParams.VX[row * width + col] - 0.5*(R - L);
-    cuParams.VY[row * width + col] = cuParams.VY[row * width + col] - 0.5*(T - B);
+        if (rowOnScreen > 0) {
+            if (isInBox(rowOnScreen-1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen - 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                T = sharedPressures[r * boxWidth + c];
+            } else { 
+                T = cuParams.pressures[(rowOnScreen-1) * width + colOnScreen];
+            }
+        }
+        if (rowOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen+1, colOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = (rowOnScreen + 1) % blockDim.y;
+                c = colOnScreen % blockDim.x;
+                B = sharedPressures[r * boxWidth + c];
+            } else {
+                B = cuParams.pressures[(rowOnScreen+1) * width + colOnScreen];
+            }
+        }
+        if (colOnScreen < cells_per_side) {
+            if (isInBox(rowOnScreen, colOnScreen+1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen+1) % blockDim.x;
+                R = sharedPressures[r * boxWidth + c];
+            } else {
+                R = cuParams.pressures[rowOnScreen * width + (colOnScreen+1)];
+            }
+        }
+        if (colOnScreen > 0) {
+            if (isInBox(rowOnScreen, colOnScreen-1, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+                r = rowOnScreen % blockDim.y;
+                c = (colOnScreen-1) % blockDim.x;
+                L = sharedPressures[r * boxWidth + c];
+            } else {
+                L = cuParams.pressures[rowOnScreen * width + (colOnScreen-1)];
+            }
+        }
+        cuParams.VX[rowOnScreen * width + colOnScreen] = cuParams.VX[rowOnScreen * width + colOnScreen] - 0.5*(R - L);
+        cuParams.VY[rowOnScreen * width + colOnScreen] = cuParams.VY[rowOnScreen * width + colOnScreen] - 0.5*(T - B);
+    }
 }
 
 //kernelCopyColor
