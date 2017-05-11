@@ -6,6 +6,7 @@
 #include <cstring>
 #include <vector>
 #include <unistd.h>
+#include <omp.h>
 #include "refRenderer.h"
 #include "image.h"
 #include "util.h"
@@ -294,6 +295,7 @@ RefRenderer::clearImage() {
 
 void RefRenderer::advectColorBackward() {
      //Advecting the values in color
+     #pragma omp parallel for collapse(2) 
      for (int row = 0; row < cells_per_side; row++) {
          for (int col = 0; col < cells_per_side; col++) {
             int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
@@ -316,6 +318,7 @@ void RefRenderer::advectColorBackward() {
  
  void RefRenderer::advectColorForward() {
      //Advecting the values in color
+     #pragma omp parallel for collapse(2) 
      for (int row = 0; row < cells_per_side; row++) {
          for (int col = 0; col < cells_per_side; col++) {
             int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
@@ -339,6 +342,7 @@ void RefRenderer::advectColorBackward() {
 
 void
 RefRenderer::advectColor() {
+     #pragma omp parallel for collapse(3) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             for (int k = 0; k < 4; k++) {
@@ -353,6 +357,7 @@ RefRenderer::advectColor() {
 
 void
 RefRenderer::applyPressure() {
+    #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side; i ++) {
         for (int j = 0; j < cells_per_side; j++) {
             float force_x = (pressures[i][j] - pressures[i][j+1]);
@@ -369,6 +374,7 @@ RefRenderer::applyPressure() {
 
 
 void RefRenderer::advectVelocityForward() {
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             advectionCopyX[i][j] = velocitiesX[i][j];
@@ -376,6 +382,7 @@ void RefRenderer::advectVelocityForward() {
         }
     }
 
+     #pragma omp parallel for collapse(2) 
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
@@ -397,6 +404,7 @@ void RefRenderer::advectVelocityForward() {
 
 void
 RefRenderer::advectVelocityBackward() {
+     #pragma omp parallel for collapse(2) 
     for (int row = 0; row < cells_per_side; row++) {
         for (int col = 0; col < cells_per_side; col++) {
            int pixelRow = row * CELL_DIM;// + CELL_DIM/2;
@@ -429,6 +437,7 @@ RefRenderer::applyDivergence() {
     float R = 0.0;
     float B = 0.0;
     float T = 0.0;
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             if (isBoundary(i,j)) continue;
@@ -449,10 +458,12 @@ RefRenderer::pressureSolve() {
     float B = 0.0;
     float T = 0.0;
     float** tempPressure = new float*[cells_per_side + 1];
+     #pragma omp parallel for 
     for(int i = 0; i < cells_per_side+1; i++) {
         tempPressure[i] = new float[cells_per_side+1];
     }
 
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             if (isBoundary(i,j)) continue;
@@ -464,6 +475,7 @@ RefRenderer::pressureSolve() {
                 //if (L+R+B+T > 0.0) printf("L+R+B+T is %f, -1*divergence is %f\n", L+R+B+T, -1*divergence[i][j]);
         }
     }
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) { 
             if (isBoundary(i,j)) continue;
@@ -479,6 +491,7 @@ RefRenderer::pressureGradient() {
     float R = 0.0;
     float B = 0.0;
     float T = 0.0;
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             if (isBoundary(i,j)) continue;
@@ -501,6 +514,7 @@ RefRenderer::applyVorticity() {
     float R = 0.0;
     float B = 0.0;
     float T = 0.0;
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             if (isBoundary(i,j)) continue;
@@ -521,6 +535,7 @@ RefRenderer::applyVorticityForce() {
     float vortB = 0.0;
     float vortT = 0.0;
     float vortC = 0.0;
+     #pragma omp parallel for collapse(2) 
     for (int i = 0; i < cells_per_side + 1; i++) {
         for (int j = 0; j < cells_per_side + 1; j++) {
             if (isBoundary(i,j)) continue;
@@ -554,6 +569,7 @@ RefRenderer::render() {
     pressureGradient();
 
     // Draw
+     #pragma omp parallel for 
     for (int i = 0; i < 4*image->width*image->height; i+=4) {
             int grid_row = ((i/4) / image->width) / (CELL_DIM);
             int grid_col = ((i/4) % image->width) / (CELL_DIM);
