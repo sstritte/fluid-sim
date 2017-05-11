@@ -16,7 +16,8 @@
 
 #define CELL_DIM 1
 #define TIME_STEP 1
-#define BLOCKSIZE 16*16
+#define BLOCKSIDE 16
+#define BLOCKSIZE BLOCKSIDE*BLOCKSIDE
 
 ///////////////////////////CUDA CODE BELOW////////////////////////////////
 struct GlobalConstants {
@@ -907,7 +908,7 @@ void CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
     mplsSize = mpls.size();
     if (mplsSize < 2) {
         // if mpls.size is 0, then call kernel that decreases VX,VY by 0.999
-        dim3 blockDim(16,16,1);
+        dim3 blockDim(BLOCKSIDE,BLOCKSIDE,1);
         dim3 gridDim(
                 (image->width + blockDim.x - 1) / blockDim.x,
                 (image->height + blockDim.y - 1) / blockDim.y);
@@ -928,7 +929,7 @@ void CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
         cudaMemcpy(cdMpls, mplsArray, (mplsSize * 2) * sizeof(int), 
                 cudaMemcpyHostToDevice);
 
-        dim3 blockDim(16,16,1);
+        dim3 blockDim(BLOCKSIDE,BLOCKSIDE,1);
         dim3 gridDim(
                 (image->width + blockDim.x - 1) / blockDim.x,
                 (image->height + blockDim.y - 1) / blockDim.y);
@@ -954,7 +955,7 @@ CudaRenderer::allocOutputImage(int width, int height) {
 // Clear's the renderer's target image.  
 void
 CudaRenderer::clearImage() {
-    dim3 blockDim(16,16,1);
+    dim3 blockDim(BLOCKSIDE,BLOCKSIDE,1);
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
@@ -964,7 +965,7 @@ CudaRenderer::clearImage() {
 
 void
 CudaRenderer::render() {
-    dim3 blockDim(16,16,1);
+    dim3 blockDim(BLOCKSIDE,BLOCKSIDE,1);
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);

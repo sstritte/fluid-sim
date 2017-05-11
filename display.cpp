@@ -8,7 +8,7 @@
 #include "image.h"
 #include "platformgl.h"
 
-
+int number;
 void renderPicture();
 
 
@@ -36,7 +36,12 @@ handleReshape(int w, int h) {
 
 void
 handleDisplay() {
-
+    if (number == 100 || number == 150) {
+        printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+    } else {
+        printf("NUMBER %d ",number);
+    }
+    number++;
     // simulation and rendering work is done in the renderPicture
     // function below
 
@@ -169,5 +174,6 @@ startRendererWithDisplay(CircleRenderer* renderer) {
     glutKeyboardFunc(handleKeyPress);
     glutMouseFunc(handleMouseClick);
     glutMotionFunc(handleMouseMove);
+    number = 0;
     glutMainLoop();
 }
