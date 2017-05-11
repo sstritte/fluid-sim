@@ -1031,7 +1031,7 @@ CudaRenderer::render() {
     kernelCopyVelocities<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize(); 
     kernelAdvectVelocityForward<<<gridDim, blockDim>>>();
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
     kernelAdvectVelocityBackward<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
     
@@ -1053,7 +1053,7 @@ CudaRenderer::render() {
    
     //DRAW STUFF
     kernelDrawColor<<<gridDim, blockDim>>>(mplsSize);
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
  
     kernelCopyColor<<<gridDim,blockDim>>>();
     cudaDeviceSynchronize(); 
