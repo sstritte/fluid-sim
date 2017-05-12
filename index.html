@@ -42,34 +42,86 @@
         <section class="wrapper style1">
           <div class="inner">
 
+
+
+
+
             <h3>Summary</h3>
             <p>We implemented a fluid simulation on a CPU with OpenMP and on a GPU with CUDA from scratch, and compared the performance of the two implementations. The fluid responds to mouse interactions, and renders a display using OpenGL.</p>
 
+            <h3>Demo</h3>
+            <p align="center">
+                <video controls="controls" width="500" height="500" name="Video Name" src="fluid-sim-demo.mov" poster="images/demo_screenshot.png"></video>
+            </p>
+
             <h3>Background</h3>
             <p>
-                The simulation of fluids is computationally very extensive, and could benefit greatly from paralellization since computations are being done for each of the pixels.
+                The simulation of fluids is computationally very expensive, and could benefit greatly from paralellization since computations are being done for each of the pixels.
             </p>
 
             <p>
-                In a grid-based simulation like ours, the fluid is represented by dividing up the space a fluid might occupy into individual cells (in our case, pixels), and storing certain quantites of the fluid in each cell, like velocity, pressure, and color. These different quantities represent the fluid at each cell at a certain point in time, and are represented in separate arrays. 
+                In a grid-based simulation like ours, the fluid is represented by dividing up the space a fluid might occupy into individual cells (in our case, pixels), and storing certain quantities of the fluid in each cell, like velocity, pressure, and color. These different quantities represent the fluid at each cell at a certain point in time, and are represented in separate arrays. 
             </p>
-            <table class="image" border="0">
-                <caption align="bottom">A grid-based representation with a single quantity (velocity, for example)</caption>
-                <tr><td><img src="images/gridbased.jpg" alt="Grid based simulation" style="max-width:100%;"></td></tr>
-            </table>
-            <p>
-                A fundamental operation in grid-based fluid dynamics is advection, which is moving quantities (like velocity, pressure, color, etc.) across the grid for the next time step based on the current velocity of each cell. Additionally, there are other operations that account for vorticity (rotation), divergence, pressure, and color to create realistic fluid motion.Due to the nature of fluid motion, these operations  
+            <p align="center">
+                <img src="images/gridbased.jpg" alt="Grid based simulation" style="max-width:100%;" > <br>
+                A grid-based representation with a single quantity (velocity, for example)
             </p>
             <p>
-                We can use parallelization within each of these computations to perform the operations on each cell in parallel. However, each important operation needs to be done in sequence. This is because the computation for a given cell relies on the result of previous computation for both itself and its neighboring cells.
+                A fundamental operation in grid-based fluid dynamics is advection, which is moving quantities across the grid for the next time step based on the current velocity of each cell. Simplified, forward advection is calculating where the fluid in your cell will be at the next time step, and giving your current quantity that you're advecting (velocity or color) to the cell where the fluid will be. Backwards advection is trickier to understand, but it's essentially the same idea except you trace your velocity backwards and pull that value into your cell. Additionally, there are other operations to create realistic fluid motion, accounting for vorticity (rotation), divergence, pressure, and color.
             </p>
             <p>
-                At the end of each time step, the appropriate colors are given to OpenGL to render onto the screen. The faster the computation is, the faster each frame is able to be rendered, which creates a more seamless simulation.
+                We can use parallelization within each of these computations to perform the operations on each cell in parallel. However, due to the nature of fluid motion, the state of a cell is affected by its neighboring cells, so these operations require accessing quantities from cells other than your cell. This introduces a level of complexity, since operations have to be fully completed for the entire grid in order to move onto the next operation. This is because the computation for a given cell relies on the result of previous computations for both itself and its neighboring cells.
+            </p>
+            <p>
+                <div class="flex flex-3">
+                    <div class="col align-center">
+                        <img src="images/dependencies.png" alt="Operation dependencies" style="max-height:400px; max-width:100%;" >
+                        <br>
+                        Dependency graph for our implementation
+                    </div>
+                    <div class="col align-center">
+                        <img src="images/advection.png" alt="Advection" style="max-height:300px; max-width:100%;" >
+                        <br>
+                        In advection, the computation for a cell loads/stores quantities from other cells 
+                    </div>
+                    <div class="col align-center">
+                        <img src="images/neighbors.png" alt="Reading from neighbor cells" style="max-height:300px; max-width:100%;" >
+                        <br>
+                        In the operations from applyVorticity() to pressureGradient(), quantities from neighboring cells are used
+                    </div>
+
+                </div>
+            </p>
+            <p>
+                At the end of each time step, the appropriate colors are given to OpenGL to render onto the screen. The faster the computation is, the faster each frame is able to be rendered, which creates a more seamless animation.
             </p>
 
             <h3>Approach</h3>
             <p>
-                We used CUDA to map the computation onto the GPU. Specifically, we translated the operations into kernels, which we called on thread blocks that were 16x16. While doing this, we came across dependencies within operations, and had to separate these into different kernels. 
+
+                We used CUDA to map the computation onto the GPU. Specifically, we copied all the arrays into device memory and translated each of the operations into kernels, which we called for each grid cell using 16x16 thread blocks. Because of the dependencies, we had to separate kernel instances for each operation in order to synchronize before moving on to the next operation. 
+            </p>
+            <p>
+                One area that we put special thought into was processing the mouse press events, since you need to go through all the mouse segments that were pressed since the last screen render for each pixel. We considered the tradeoffs between launching a kernel for each pixel and having a loop within the kernel to loop through the mouse segments, or flattening it and having a thread for each pixel-segment pair. We figured that since the number of segments would likely be small compared to the number of pixels in the image (usually less than 50), it would be better to have a thread for each pixel with the loop. This would have less kernel launch overhead and less communication between threads in a thread block, since the purpose of looping was to find the pixel's minimum length to any of the mouse segments. In the flattened version, the threads in a thread block would have needed to communicate with each other to determine what the minimum length was.
+            </p>
+            <p>
+                Simply translating the implementation to CUDA kernels improved the computation time drastically. Next, we decided to take advantage of shared memory in a thread block to achieve further speedup. For both advection and the operations that access the pixel's immediate neighbors, it is highly likely that the other cells being read from or written to will be in the same thread block. Only pixels along the perimeter or pixels with large velocities will have to access global device memory for cells quantities outside of the thread block.
+            </p>
+            <p>
+                <div class="flex flex-2">
+                    <div class="col align-center">
+                        <img src="images/advection_blocks.png" alt="Advection" style="height:300px;" >
+                        <br>
+                        Advection within and outside a thread block
+                    </div>
+                    <div class="col align-center">
+                        <img src="images/neighbors_blocks.png" alt="Reading from neighbor cells" style="height:300px; max-width:100%;" >
+                        <br>
+                        Looking at a pixel's direct neighbors will mostly use shared memory, except on the perimeters 
+                    </div>
+
+
+                </div>
             </p>
 
             <h3>Results</h3>
@@ -84,14 +136,14 @@
                 Obviously, the graph is upward trending since the larger screens have more pixels and require more computaiton.In general, we see that the use of thread blocks in CUDA increases performance because it supports work being done in parallel. Additionally, on modern NVIDIA hardware, groups of 32 CUDA threads in a thread block are executed simultaneously using 32-wide SIMD execution. This explains why the 2x2 and 4x4 thread blocks achieves less speedup - with only 4 or 16 threads, there are empty, unused SIMD vector lanes. 
             </p>
             <p align="center">
-                <img src="images/initialCudaComp.png" alt="Grid based simulation" style="max- width:100%;"> <br>
+                <img src="images/initialCudaComp.png" alt="Grid based simulation" style="height: 500px; max- width:100%;"> <br>
                 Computaiton time for 50 iterations of various screen sizes, using our initial CUDA implementation
             </p>
             <p>
                 Although this initial parallel implementation achieved impressive speedup over our baseline during the phase where the computation for each pixel is done, we noticed that the overall time was not significantly shorter. The graph below shows the total time to run 50 iterations, for our baseline and CUDA implementations with different block sizes. When considering the entire program, our initial parallel GPU implementation achieved only around 1.5x speedup over the CPU implementation.
             </p>
             <p align="center">
-                <img src="images/initialCudaTotal.png" alt="Grid based simulation" style="max- width:100%;"> <br>
+                <img src="images/initialCudaTotal.png" alt="Grid based simulation" style="height: 500px; max- width:100%;"> <br>
                 Total time for 50 iterations of various screen sizes, using our initial CUDA implementation
             </p>
             <p>
@@ -113,29 +165,39 @@
                 These changes improved our GPU implementation substantially. The graph below shows the computation time for the inital GPU implementation compared to the optimized GPU implementation, for various block sizes. For all block sizes, the dotted line (which represents the optimized version) is lower than the solid line (which represents the initial version). This suggests that our optimizations were effective. 
             </p>
             <p align="center">
-                <img src="images/oldVsNewCuda.png" alt="Grid based simulation" style="max- width:100%;"> <br>
+                <img src="images/oldVsNewCuda.png" alt="Grid based simulation" style="height: 500px; max- width:100%;"> <br>
                 Total time for 50 iterations of various screen sizes, using our initial CUDA implementation
             </p>
             <p>
                 With these changes, we improved our GPU implentation speedup over the CPU implementation for just the computation portion to around 80x, shown in the graph below. 
             </p>
             <p align="center">
-                <img src="images/newCudaComp.png" alt="Grid based simulation" style="max- width:100%;"> <br>
+                <img src="images/newCudaComp.png" alt="Grid based simulation" style="height: 500px; max- width:100%;"> <br>
                 Total time for 50 iterations of various screen sizes, using our initial CUDA implementation
             </p>
             <p>
                 Unfortunately, our speedup is still ultimately limited by the slow drawing. Even with our improvements, our GPU implementation still achieves around 1.5x speedup over the CPU implementation for the total time.
             </p>
             <p align="center">
-                <img src="images/newCudaTotal.png" alt="Grid based simulation" style="max- width:100%;"> <br>
+                <img src="images/newCudaTotal.png" alt="Grid based simulation" style="height: 500px; max- width:100%;"> <br>
                 Total time for 50 iterations of various screen sizes, using our initial CUDA implementation
             </p>
             <p>
                 As all of our graphs demonstrate, we experimented with different thread block sizes. Our results indicate that 16x16 thread blocks, which correspond to 16x16 pixel squares of the display, acheived the lowest times.
             </p>
 
-        </div>
-    </section>
+       
+        <h3>References</h3>
+        <p>
+            We mainly referenced <a href="http://cowboyprogramming.com/2008/04/01/practical-fluid-mechanics/" style="color: blue;">Practical Fluid Mechanics</a> and <a href="https://github.com/haxiomic/GPU-Fluid-Experiments" style="color: blue;">haxiomic's GPU-Fluid-Experiments</a> to understand the physics of fluid motion.
+        </p>
+
+        <h3>List of Work Done by Each Student</h3>
+
+        <p> Equal work was performed by both project members. </p>
+
+    </div>
+</section>
 </div>
 
 
