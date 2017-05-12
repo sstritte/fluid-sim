@@ -18,7 +18,6 @@
 #define TIME_STEP 1
 #define BLOCKSIDE 16
 #define BLOCKSIZE BLOCKSIDE*BLOCKSIDE
-
 ///////////////////////////CUDA CODE BELOW////////////////////////////////
 struct GlobalConstants {
     int cells_per_side;
@@ -203,56 +202,83 @@ __global__ void kernelCopyVelocities() {
 //kernelAdvectVelocityForward
 __global__ void kernelAdvectVelocityForward() {
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (colOnScreen >= width || rowOnScreen >= height) return;
+    if (rowOnScreen * width + colOnScreen >= width * height) return;
 
-   int pixelRow = row * CELL_DIM;
-   int pixelCol = col * CELL_DIM;
-   int nextPixelRow = round(pixelRow + TIME_STEP * cuParams.VYCopy[row * width + col] * CELL_DIM);
-   int nextPixelCol = round(pixelCol + TIME_STEP * cuParams.VXCopy[row * width + col] * CELL_DIM);
-   int nextCellCol = nextPixelCol / CELL_DIM;
-   int nextCellRow = nextPixelRow / CELL_DIM;
+   __shared__ float sharedVX[BLOCKSIZE]; 
+   __shared__ float sharedVY[BLOCKSIZE]; 
+    sharedVX[rowInBox * boxWidth + colInBox] =
+        cuParams.VXCopy[rowOnScreen * width + colOnScreen];
+    sharedVY[rowInBox * boxWidth + colInBox] =
+        cuParams.VYCopy[rowOnScreen * width + colOnScreen];
+    __syncthreads();
 
-   if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
-           && nextCellCol >= 0 && nextCellRow >= 0) {
-        cuParams.VX[nextCellRow * width + nextCellCol] = cuParams.VXCopy[row * width + col];
-        cuParams.VY[nextCellRow * width + nextCellCol] = cuParams.VYCopy[row* width + col];
-   } 
-
+   int nextRowOnScreen = round(rowOnScreen + TIME_STEP * cuParams.VYCopy[rowOnScreen * width + colOnScreen]);
+   int nextColOnScreen = round(colOnScreen + TIME_STEP * cuParams.VXCopy[rowOnScreen * width + colOnScreen]);
+   if (nextColOnScreen < cells_per_side && nextRowOnScreen < cells_per_side 
+           && nextColOnScreen >= 0 && nextRowOnScreen >= 0) {
+       
+       if (isInBox(nextRowOnScreen, nextColOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+            int r = nextRowOnScreen % blockDim.y;
+            int c = nextColOnScreen % blockDim.x;
+            cuParams.VX[nextRowOnScreen * width + nextColOnScreen] = sharedVX[r * boxWidth + c];
+            cuParams.VY[nextRowOnScreen * width + nextColOnScreen] = sharedVY[r * boxWidth + c];
+       } else {
+            cuParams.VX[nextRowOnScreen * width + nextColOnScreen] = cuParams.VXCopy[rowOnScreen * width + colOnScreen];
+            cuParams.VY[nextRowOnScreen * width + nextColOnScreen] = cuParams.VYCopy[rowOnScreen * width + colOnScreen];
+       }
+   }
 }
 
 //kernelAdvectVelocityBackward
 __global__ void kernelAdvectVelocityBackward() {
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (colOnScreen >= width || rowOnScreen >= height) return;
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-   int pixelRow = row * CELL_DIM;
-   int pixelCol = col * CELL_DIM;
-   int prevPixelRow = round(pixelRow - TIME_STEP * cuParams.VYCopy[row * width + col] * CELL_DIM);
-   int prevPixelCol = round(pixelCol - TIME_STEP * cuParams.VXCopy[row * width + col] * CELL_DIM);
-   int prevCellCol = prevPixelCol / CELL_DIM;
-   int prevCellRow = prevPixelRow / CELL_DIM;
+    __shared__ float sharedVX[BLOCKSIZE]; 
+   __shared__ float sharedVY[BLOCKSIZE]; 
+    sharedVX[rowInBox * boxWidth + colInBox] =
+        cuParams.VXCopy[rowOnScreen * width + colOnScreen];
+    sharedVY[rowInBox * boxWidth + colInBox] =
+        cuParams.VYCopy[rowOnScreen * width + colOnScreen];
+    __syncthreads();
 
-   if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
-           && prevCellCol >= 0 && prevCellRow >= 0) {
-        cuParams.VX[row * width + col] = cuParams.VXCopy[prevCellRow * width + prevCellCol];
-        cuParams.VY[row * width + col] = cuParams.VYCopy[prevCellRow * width + prevCellCol];
+   int prevRowOnScreen = round(rowOnScreen - TIME_STEP * cuParams.VYCopy[rowOnScreen * width + colOnScreen]);
+   int prevColOnScreen = round(colOnScreen - TIME_STEP * cuParams.VXCopy[rowOnScreen * width + colOnScreen]);
+
+   if (prevColOnScreen < cells_per_side && prevColOnScreen < cells_per_side 
+           && prevColOnScreen >= 0 && prevRowOnScreen >= 0) {
+       if (isInBox(prevRowOnScreen, prevColOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+            int r = prevRowOnScreen % blockDim.y;
+            int c = prevColOnScreen % blockDim.x;
+            cuParams.VX[rowOnScreen * width + colOnScreen] = sharedVX[r * boxWidth + c];
+            cuParams.VY[rowOnScreen * width + colOnScreen] = sharedVY[r * boxWidth + c];
+       } else {
+            cuParams.VX[rowOnScreen * width + colOnScreen] = cuParams.VXCopy[prevRowOnScreen * width + prevColOnScreen];
+            cuParams.VY[rowOnScreen * width + colOnScreen] = cuParams.VYCopy[prevRowOnScreen * width + prevColOnScreen];
+       }
    } 
-   if (prevCellCol == col && prevCellRow == row) {
+   if (prevColOnScreen == colOnScreen && prevRowOnScreen == rowOnScreen) {
         // you don't move so just disappear
-        cuParams.VX[row * width + col] = 0;
-        cuParams.VY[row * width + col] = 0;
+        cuParams.VX[rowOnScreen * width + colOnScreen] = 0;
+        cuParams.VY[rowOnScreen * width + colOnScreen] = 0;
    }
 }
 
@@ -652,32 +678,46 @@ __global__ void kernelCopyColor() {
 //kernelAdvectColorForward
 __global__ void kernelAdvectColorForward() {
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (colOnScreen >= width || rowOnScreen >= height) return;
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    int pixelRow = row * CELL_DIM;
-    int pixelCol = col * CELL_DIM;
-    // THERE ARE A ZILLION VERSION OF ROUNDING FUNCTIONS IN THE CUDA MATH API
-    // http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__SINGLE.html#group__CUDA__MATH__SINGLE
-    // I THINK WE WANT TO CHANGE round(x) TO rint(x).... BUT NOT SURE
-    // SAME CHANGE WOULD NEED TO BE APPLIED IN kernelAdvectVelocityForward() and kernelAdvectVelocityBackward()
-    // and kernelAdvectColorBackward()
-    int nextPixelRow = round(pixelRow + TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
-    int nextPixelCol = round(pixelCol + TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
-    int nextCellCol = nextPixelCol / CELL_DIM;
-    int nextCellRow = nextPixelRow / CELL_DIM;
+     __shared__ float sharedColorCopy[4 * BLOCKSIZE];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 0] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 0];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 1] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 1];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 2] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 2];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 3] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 3];
+    __syncthreads();
 
-   if (nextCellCol < cells_per_side && nextCellRow < cells_per_side 
-           && nextCellCol >= 0 && nextCellRow >= 0) {
-        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 0] = cuParams.colorCopy[(row * width + col) * 4 + 0];
-        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 1] = cuParams.colorCopy[(row * width + col) * 4 + 1];
-        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 2] = cuParams.colorCopy[(row * width + col) * 4 + 2];
-        cuParams.color[(nextCellRow * width + nextCellCol) * 4 + 3] = cuParams.colorCopy[(row * width + col) * 4 + 3];
+    int nextRowOnScreen = round(rowOnScreen + TIME_STEP * cuParams.VY[rowOnScreen * width + colOnScreen]);
+    int nextColOnScreen = round(colOnScreen + TIME_STEP * cuParams.VX[rowOnScreen * width + colOnScreen]);
+
+   if (nextColOnScreen < cells_per_side && nextRowOnScreen < cells_per_side 
+           && nextColOnScreen >= 0 && nextRowOnScreen >= 0) {
+        if (isInBox(nextRowOnScreen, nextColOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+            int r = nextRowOnScreen % blockDim.y;
+            int c = nextColOnScreen % blockDim.x;
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 0] = sharedColorCopy[(r * boxWidth + c) * 4 + 0];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 1] = sharedColorCopy[(r * boxWidth + c) * 4 + 1];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 2] = sharedColorCopy[(r * boxWidth + c) * 4 + 2];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 3] = sharedColorCopy[(r * boxWidth + c) * 4 + 3];
+        } else {
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 0] = 
+                cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 0];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 1] = 
+                cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 1];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 2] = 
+                cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 2];
+            cuParams.color[(nextRowOnScreen * width + nextColOnScreen) * 4 + 3] = 
+                cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 3];
+        }
 
    } 
 }
@@ -685,27 +725,46 @@ __global__ void kernelAdvectColorForward() {
 //kernelAdvectColorBackward
 __global__ void kernelAdvectColorBackward() {
     int cells_per_side = cuParams.cells_per_side;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int row = blockIdx.y * blockDim.y + threadIdx.y; 
+    int rowInBox = threadIdx.y;
+    int colInBox = threadIdx.x;
+    int boxWidth = blockDim.x;
+    int colOnScreen = blockIdx.x * blockDim.x + threadIdx.x;
+    int rowOnScreen = blockIdx.y * blockDim.y + threadIdx.y; 
     int width = cuParams.width;
     int height = cuParams.height;
 
-    if (col >= width || row >= height) return;
-    if (row * width + col >= width * height) return; 
+    if (colOnScreen >= width || rowOnScreen >= height) return;
+    if (rowOnScreen * width + colOnScreen >= width * height) return; 
 
-    int pixelRow = row * CELL_DIM;
-    int pixelCol = col * CELL_DIM;
-    int prevPixelRow = round(pixelRow - TIME_STEP * cuParams.VY[row * width + col] * CELL_DIM);
-    int prevPixelCol = round(pixelCol - TIME_STEP * cuParams.VX[row * width + col] * CELL_DIM);
-    int prevCellCol = prevPixelCol / CELL_DIM;
-    int prevCellRow = prevPixelRow / CELL_DIM;
+    __shared__ float sharedColorCopy[4 * BLOCKSIZE];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 0] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 0];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 1] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 1];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 2] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 2];
+     sharedColorCopy[(rowInBox * boxWidth + colInBox) * 4 + 3] = cuParams.colorCopy[(rowOnScreen * width + colOnScreen) * 4 + 3];
+    __syncthreads();
 
-    if (prevCellCol < cells_per_side && prevCellRow < cells_per_side 
-            && prevCellCol >= 0 && prevCellRow >= 0) {
-         cuParams.color[(row * width + col) * 4 + 0] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 0];
-         cuParams.color[(row * width + col) * 4 + 1] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 1];
-         cuParams.color[(row * width + col) * 4 + 2] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 2];
-         cuParams.color[(row * width + col) * 4 + 3] = cuParams.colorCopy[(prevCellRow * width + prevCellCol) * 4 + 3];
+    int prevRowOnScreen = round(rowOnScreen - TIME_STEP * cuParams.VY[rowOnScreen * width + colOnScreen]);
+    int prevColOnScreen = round(colOnScreen - TIME_STEP * cuParams.VX[rowOnScreen * width + colOnScreen]);
+
+    if (prevColOnScreen < cells_per_side && prevRowOnScreen < cells_per_side 
+            && prevColOnScreen >= 0 && prevRowOnScreen >= 0) {
+        if (isInBox(prevRowOnScreen, prevColOnScreen, blockDim.x, blockDim.y, blockIdx.x, blockIdx.y)) {
+            int r = prevRowOnScreen % blockDim.y;
+            int c = prevColOnScreen % blockDim.x;
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 0] = sharedColorCopy[(r * boxWidth + c) * 4 + 0]; 
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 1] = sharedColorCopy[(r * boxWidth + c) * 4 + 1];
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 2] = sharedColorCopy[(r * boxWidth + c) * 4 + 2];
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 3] = sharedColorCopy[(r * boxWidth + c) * 4 + 3];
+        } else {
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 0] = 
+                cuParams.colorCopy[(prevRowOnScreen * width + prevColOnScreen) * 4 + 0];
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 1] = 
+                cuParams.colorCopy[(prevRowOnScreen * width + prevColOnScreen) * 4 + 1];
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 2] = 
+                cuParams.colorCopy[(prevRowOnScreen * width + prevColOnScreen) * 4 + 2];
+            cuParams.color[(rowOnScreen * width + colOnScreen) * 4 + 3] = 
+                cuParams.colorCopy[(prevRowOnScreen * width + prevColOnScreen) * 4 + 3];
+        }
    } 
 }
 
@@ -906,7 +965,7 @@ CudaRenderer::setup() {
 void CudaRenderer::setNewQuantities(std::vector<std::pair<int, int> > mpls) {
 
     mplsSize = mpls.size();
-    if (mplsSize < 2) {
+    if (mplsSize < 1) {
         // if mpls.size is 0, then call kernel that decreases VX,VY by 0.999
         dim3 blockDim(BLOCKSIDE,BLOCKSIDE,1);
         dim3 gridDim(
@@ -969,14 +1028,13 @@ CudaRenderer::render() {
     dim3 gridDim(
             (image->width + blockDim.x - 1) / blockDim.x,
             (image->height + blockDim.y - 1) / blockDim.y);
-   
     kernelCopyVelocities<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize(); 
     kernelAdvectVelocityForward<<<gridDim, blockDim>>>();
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
     kernelAdvectVelocityBackward<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
-
+    
     kernelApplyVorticity<<<gridDim, blockDim>>>();
     cudaDeviceSynchronize();
     kernelApplyVorticityForce<<<gridDim, blockDim>>>();
@@ -995,7 +1053,7 @@ CudaRenderer::render() {
    
     //DRAW STUFF
     kernelDrawColor<<<gridDim, blockDim>>>(mplsSize);
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
  
     kernelCopyColor<<<gridDim,blockDim>>>();
     cudaDeviceSynchronize(); 
