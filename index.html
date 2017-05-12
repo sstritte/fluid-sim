@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"
+<head>
+    <title>Parallel High-Resolution Fluid Simulation</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header id="header" class="alt">
+        <a href="#menu">Menu</a>
+    </header>
+
+    <!-- Nav -->
+    <nav id="menu">
+        <ul class="links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="proposal.html">Proposal</a></li>
+            <li><a href="checkpoint.html">Checkpoint</a></li>
+        </ul>
+    </nav>
+
+    <!-- Banner -->
+    <section id="banner">
+        <div class="inner">
+            <header>
+                <h1>Parallel High-Resolution Fluid Simulation</h1>
+                <p> 15-418 Final Project // Jennifer Chou (jtchou), Sienna Stritter (sstritte) </p>
+            </header>
+            <a href="https://github.com/sstritte/fluid-sim/" class="button big scrolly" target="_blank">View on Github</a>
+        </div>
+    </section>
+
+
+    <!-- Main -->
+    <div id="main">
+
+        <!-- Section -->
+        <section class="wrapper style1">
+          <div class="inner">
+
+            <h3>Summary</h3>
+            <p>We implemented a fluid simulation on a CPU with OpenMP and on a GPU with CUDA from scratch, and compared the performance of the two implementations. The fluid responds to mouse interactions, and renders a display using OpenGL.</p>
+
+            <h3>Background</h3>
+            <p>
+                The simulation of fluids is computationally very extensive, and could benefit greatly from paralellization since computations are being done for each of the pixels.
+            </p>
+
+            <p>
+                In a grid-based simulation like ours, the fluid is represented by dividing up the space a fluid might occupy into individual cells (in our case, pixels), and storing certain quantites of the fluid in each cell, like velocity, pressure, and color. These different quantities represent the fluid at each cell at a certain point in time, and are represented in separate arrays. 
+            </p>
+            <table class="image" border="0">
+                <caption align="bottom">A grid-based representation with a single quantity (velocity, for example)</caption>
+                <tr><td><img src="images/gridbased.jpg" alt="Grid based simulation" style="max-width:100%;"></td></tr>
+            </table>
+            <p>
+                A fundamental operation in grid-based fluid dynamics is advection, which is moving quantities (like velocity, pressure, color, etc.) across the grid for the next time step based on the current velocity of each cell. Additionally, there are other operations that account for vorticity (rotation), divergence, pressure, and color to create realistic fluid motion.Due to the nature of fluid motion, these operations  
+            </p>
+            <p>
+                We can use parallelization within each of these computations to perform the operations on each cell in parallel. However, each important operation needs to be done in sequence. This is because the computation for a given cell relies on the result of previous computation for both itself and its neighboring cells.
+            </p>
+            <p>
+                At the end of each time step, the appropriate colors are given to OpenGL to render onto the screen. The faster the computation is, the faster each frame is able to be rendered, which creates a more seamless simulation.
+            </p>
+
+            <h3>Approach</h3>
+            <p>
+                We used CUDA to map the computation onto the GPU. Specifically, we translated the operations into kernels, which we called on thread blocks that were 16x16. While doing this, we came across dependencies within operations, and had to separate these into different kernels. 
+            </p>
+
+            <h3>Results</h3>
+
+        </div>
+    </section>
+</div>
+
+
+<!-- Scripts -->
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/jquery.scrolly.min.js"></script>
+<script src="assets/js/jquery.scrollex.min.js"></script>
+<script src="assets/js/skel.min.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/main.js"></script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+

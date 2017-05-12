@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"
+
+<head>
+    <title>Parallel High-Resolution Fluid Simulation</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="assets/css/main.css" />
+</head>
+
+<body class="subpage">
+    <!-- Header -->
+    <header id="header">
+        <a href="#menu">Menu</a>
+    </header>
+
+    <!-- Nav -->
+    <nav id="menu">
+        <ul class="links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="proposal.html">Proposal</a></li>
+            <li><a href="checkpoint.html">Checkpoint</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main -->
+    <div id="main" style>
+        <section class="wrapper">
+            <div class="inner">
+            <div class="flex flex-2">
+                <div class="col col2">
+                    <h1> Proposal </h1>
+                    <h2> Summary </h2>
+                    We are going to implement an interactive, high-resolution fluid simulation.
+
+                    <h3> Background </h3>
+                    The simulation takes discrete time steps, recalculating the velocities and pressures (which are governed by the Navier-Stokes equations) for every pixel each step, which lends itself perfectly to a parallel approach. By rendering each time step as fast as possible, the simulation will appear smoother and more realistic.
+
+                    <h3> The Challenge </h3>
+                    We would ideally like to split up work among processing units to improve speedup. However, the calculations will likely involve memory accesses across units, so we will have to figure out how to distribute work to minimize communication overhead. We will consider using a blocked work distribution, since a pixel will have the largest effect on the pixels physically around it.
+
+                    In addition, we have to consider how to represent our fluid data. Throughout the simulation, we store various quantities (velocity, pressure, fluid concentration, etc.) at various points in space. We will have to figure out the best way to represent that information in a way that takes advantage of cache locality and shared memory.
+
+
+                    <h3> Resources </h3>
+                    Our project is inspired by this 
+                    <a href="https://haxiomic.github.io/GPU-Fluid-Experiments/html5/?q=UltraHigh">simulator</a>.
+
+                    <a href="https://cg.informatik.uni-freiburg.de/intern/seminar/gridFluids_fluid-EulerParticle.pdf">This paper</a> is useful for understanding the physics behind the fluid simulation. 
+                    <a href="http://http.developer.nvidia.com/GPUGems/gpugems_ch38.html">This webpage</a> also describes how a fluid simulator would be implemented.
+
+                    <h3> Goals and Deliverables </h3>
+                    What we plan to achieve:
+                    - Figure out how to use OpenGL to display the simulation (using Assignment 2 as a guide)
+                    - Implement a baseline fluid simulator with a single thread of control (use the papers to learn and understand the physics of fluid motion)
+                    - Transform the sequential algorithm to run with CUDA on an NVIDIA GPU (similar to Assignment 2)
+                    - Distribute work among cores by analyzing and identifying workload characteristics of the algorithm.
+                    - Try to further improve performance by considering other techniques like shared memory and cache usage. 
+
+                    Our final deliverable will be a webpage featuring a widget that will allow users to interact with the fluid using their mouse. Our implemention has to perform well enough for the fluid to flow seamlessly. The baseline CPU implementation will undoubtedly be choppy, so our parallel implementation has to obtain enough speedup and perform well enough for the fluid to flow seamlessly.
+
+                    We will demo this widget and show speedup graphs during our presentation.
+
+                    <h3> Platform Choice </h3>
+                    We will will run the parallel version of our algorithm of the GHC machines with the NVIDIA GPUs using CUDA. 
+
+                    <h3> Schedule </h3>
+                    <ul>
+                      <li>April 13: Start implementing baseline simulator on CPU</li>
+                      <li>April 19: Finish implementing baseline simulator on CPU</li>
+                      <li>April 22 - 25: Translate parallelizable computations of the algorithm into CUDA</li>
+                      <li>April 26 - May 3: Determine optimal distribution of work among cores</li>
+                      <li>May 4 - 9: Further improve performance to achieve acceptable speedup</li>
+                      <li>May 10 - 11: Implement demo widget, Prepare for presentation</li>
+                  </ul>
+              </div>
+          </div>
+          </div>
+      </section>
+  </div>
+  <!-- Scripts -->
+  <script src="assets/js/jquery.min.js"></script>
+  <script src="assets/js/jquery.scrolly.min.js"></script>
+  <script src="assets/js/jquery.scrollex.min.js"></script>
+  <script src="assets/js/skel.min.js"></script>
+  <script src="assets/js/util.js"></script>
+  <script src="assets/js/main.js"></script>
+
+</body>
+</html>
